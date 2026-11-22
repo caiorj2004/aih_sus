@@ -1,257 +1,172 @@
-import pathlib
-import urllib.parse
+"""
+pagina_chat.py
+--------------
+Aba "Assistente IA": interface Streamlit do agente de assistente.py.
+
+Secrets (Streamlit Cloud > Advanced settings > Secrets, ou .streamlit/secrets.toml local):
+
+    GROQ_API_KEY = "gsk_..."                 # obrigatório com o provedor padrão (gratuito: console.groq.com)
+    LLM_PROVIDER = "groq"                    # opcional: "groq" (padrão) ou "bedrock"
+    LLM_MODEL = "openai/gpt-oss-120b"        # opcional
+    LIMITE_PERGUNTAS_SESSAO = 15             # opcional: protege a cota gratuita contra uso abusivo
+
+    [connections.postgresql]                 # opcional: grava os logs na tabela agente_logs
+    dialect = "postgresql"
+    host = "..."  port = 5432  database = "..."  username = "..."  password = "..."
+
+Com LLM_PROVIDER = "bedrock", as credenciais vêm da cadeia padrão da AWS (AWS_ACCESS_KEY_ID,
+AWS_SECRET_ACCESS_KEY e AWS_DEFAULT_REGION nos secrets), de preferência de um usuário IAM com
+chave permanente e só a permissão do Bedrock.
+"""
+import csv
 import datetime
-import pandas as pd
+import unicodedata
+from pathlib import Path
+
 import streamlit as st
-import boto3
-from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import text
 
-from langchain_community.agent_toolkits import create_sql_agent
-from langchain_community.utilities import SQLDatabase
-from langchain_aws import ChatBedrock
-from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
+from assistente import criar_llm, montar_prompt, responder
+from dados import consultar
 
-# Importa a conexão reutilizável do módulo de banco principal
-from db import get_connection
-
-# --- CONFIGURAÇÃO BEDROCK ---
-MODELO_PODEROSO = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-
-_DATA_DIR = pathlib.Path(__file__).parent / "data"
-_QTD_FILE = _DATA_DIR / "aih_qtd_fallback.parquet"
-_VL_FILE = _DATA_DIR / "aih_vl_fallback.parquet"
-_DIC_QTD_FILE = _DATA_DIR / "dicionario_qtd.csv"
-_DIC_VL_FILE = _DATA_DIR / "dicionario_vl.csv"
+LOG_LOCAL = Path(__file__).parent / "logs" / "agente_logs.csv"
+EXEMPLOS = [
+    "Qual o valor total gasto por ano?",
+    "Quais as 5 UFs com maior valor em cirurgias do aparelho circulatório em 2025?",
+    "Como evoluiu a quantidade de partos em Brasília mês a mês em 2025?",
+]
 
 
-@st.cache_resource
-def get_database() -> SQLDatabase:
-    # 1. ESCUDO DE TOKENS (Informações personalizadas das tabelas)
-    custom_info = {
-        "aih_qtd": "Tabela de quantidades. Use APENAS colunas: ano, mes, municipio e as colunas 'qtd_XXXX' que você descobrir via dic_geral.",
-        "aih_vl": "Tabela de valores (R$). Use APENAS colunas: ano, mes, municipio e as colunas 'vl_XXXX' que você descobrir via dic_geral.",
-        "dic_geral": "Dicionário. Colunas: n (nome do procedimento), s (sufixo do código)."
-    }
-
-    # ==========================================================
-    # TENTATIVA 1: BANCO DE DADOS PRINCIPAL (POSTGRESQL SEGURO)
-    # ==========================================================
-    if "connections" in st.secrets and "postgresql" in st.secrets["connections"]:
-        try:
-            pg = st.secrets["connections"]["postgresql"]
-            
-            pwd = urllib.parse.quote_plus(str(pg["password"]))
-            username = pg["username"]
-            host = pg["host"]
-            port = pg["port"]
-            database = pg["database"]
-            
-            pg_url = f"postgresql+psycopg2://{username}:{pwd}@{host}:{port}/{database}"
-            
-            engine_pg = create_engine(
-                pg_url,
-                pool_pre_ping=True,  # Evita quedas por conexões inativas
-                pool_recycle=1800    # Recicla conexões a cada 30 minutos
-            )
-            
-            # Testa se a conexão está realmente ativa
-            with engine_pg.connect() as check_conn:
-                pass 
-            
-            # Verifica se a tabela 'dic_geral' existe. Se não, tenta criar.
-            insp = inspect(engine_pg)
-            if not insp.has_table("dic_geral"):
-                dics = []
-                if _DIC_QTD_FILE.exists():
-                    df_q = pd.read_csv(_DIC_QTD_FILE)
-                    df_q['n'] = df_q['Descrição'].str.extract(r"^\w+\s*.\s*\d+\s*(.*)")[0]
-                    df_q['s'] = df_q['Variável'].str.replace("qtd_", "", regex=False)
-                    dics.append(df_q[['n', 's']].dropna())
-                if _DIC_VL_FILE.exists():
-                    df_v = pd.read_csv(_DIC_VL_FILE)
-                    df_v['n'] = df_v['Descrição'].str.extract(r"^\w+\s*.\s*\d+\s*(.*)")[0]
-                    df_v['s'] = df_v['Variável'].str.replace("vl_", "", regex=False)
-                    dics.append(df_v[['n', 's']].dropna())
-                
-                if dics:
-                    pd.concat(dics).drop_duplicates().to_sql("dic_geral", engine_pg, index=False, if_exists="replace")
-            
-            return SQLDatabase(
-                engine_pg, 
-                include_tables=["aih_qtd", "aih_vl", "dic_geral"],
-                custom_table_info=custom_info
-            )
-                
-        except Exception as e:
-            st.warning(f"⚠️ Nota: O agente não pôde usar o PostgreSQL direto (Motivo: {e}). Utilizando cópia local estável.")
-
-    # ==========================================================
-    # TENTATIVA 2: FALLBACK SEGURO (SQLITE EM MEMÓRIA)
-    # ==========================================================
-    engine_sqlite = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    
-    if _QTD_FILE.exists() and _VL_FILE.exists():
-        pd.read_parquet(_QTD_FILE).to_sql("aih_qtd", engine_sqlite, index=False, if_exists="replace")
-        pd.read_parquet(_VL_FILE).to_sql("aih_vl", engine_sqlite, index=False, if_exists="replace")
-
-    dics = []
-    if _DIC_QTD_FILE.exists():
-        df_q = pd.read_csv(_DIC_QTD_FILE)
-        df_q['n'] = df_q['Descrição'].str.extract(r"^\w+\s*.\s*\d+\s*(.*)")[0]
-        df_q['s'] = df_q['Variável'].str.replace("qtd_", "", regex=False)
-        dics.append(df_q[['n', 's']].dropna())
-    if _DIC_VL_FILE.exists():
-        df_v = pd.read_csv(_DIC_VL_FILE)
-        df_v['n'] = df_v['Descrição'].str.extract(r"^\w+\s*.\s*\d+\s*(.*)")[0]
-        df_v['s'] = df_v['Variável'].str.replace("vl_", "", regex=False)
-        dics.append(df_v[['n', 's']].dropna())
-
-    if dics:
-        pd.concat(dics).drop_duplicates().to_sql("dic_geral", engine_sqlite, index=False, if_exists="replace")
-
-    return SQLDatabase(
-        engine_sqlite, 
-        include_tables=["aih_qtd", "aih_vl", "dic_geral"],
-        custom_table_info=custom_info
-    )
-
-
-@st.cache_resource
-def get_sql_agent():
-    db = get_database()
-
-    if "AWS_ACCESS_KEY_ID" not in st.secrets or "AWS_SECRET_ACCESS_KEY" not in st.secrets:
-        raise KeyError(
-            "Credenciais da AWS ausentes. Por favor, verifique se elas foram salvas corretamente "
-            "no formato TOML no painel do Streamlit Cloud."
-        )
-
-    aws_access_key = st.secrets["AWS_ACCESS_KEY_ID"]
-    aws_secret_key = st.secrets["AWS_SECRET_ACCESS_KEY"]
-    aws_region = st.secrets.get("AWS_DEFAULT_REGION", "us-east-1")
-    aws_session_token = st.secrets.get("AWS_SESSION_TOKEN")
-
-    bedrock_client = boto3.client(
-        service_name="bedrock-runtime",
-        region_name=aws_region,
-        aws_access_key_id=aws_access_key,
-        aws_secret_access_key=aws_secret_key,
-        aws_session_token=aws_session_token,
-    )
-
-    llm = ChatBedrock(
-        client=bedrock_client,
-        model_id=MODELO_PODEROSO,
-        model_kwargs={"temperature": 0}
-    )
-
-    prefixo = (
-        "Você é um analista de dados especialista no DATASUS interagindo com um banco de dados POSTGRESQL.\n\n"
-        "REGRAS (SIGA RIGOROSAMENTE):\n"
-        "1. PERGUNTAS GERAIS: Se o usuário pedir o 'total', 'soma geral', ou não especificar um procedimento médico, NUNCA consulte a tabela dic_geral. Use DIRETAMENTE a coluna 'total' de 'aih_qtd' ou 'aih_vl'. Ex: SELECT ano, SUM(total) FROM aih_qtd GROUP BY ano.\n"
-        "2. PERGUNTAS ESPECÍFICAS: Apenas se o usuário citar um procedimento (ex: cirurgia), consulte 'dic_geral' usando LIKE para descobrir o sufixo 's' e consulte a coluna 'qtd_' + sufixo.\n"
-        "3. NUNCA tente somar dezenas de colunas ao mesmo tempo.\n"
-        "4. SINTAXE POSTGRESQL: NUNCA use o comando 'DESCRIBE'. Para descobrir as colunas de uma tabela, use a ferramenta 'sql_db_schema' ou faça um SELECT na 'information_schema.columns'."
-    )
-
-    return create_sql_agent(
-        llm=llm,
-        db=db,
-        agent_type="zero-shot-react-description", 
-        handle_parsing_errors=True,
-        prefix=prefixo,
-        max_iterations=15,
-        verbose=False
-    )
-
-
-def salvar_log_interacao(pergunta: str, resposta: str):
-    """Salva a pergunta e resposta reusando a conexão existente do db.py."""
-    agora = datetime.datetime.now()
-    
-    # 1. Tenta salvar no PostgreSQL reusando o pool de conexões
-    if "connections" in st.secrets and "postgresql" in st.secrets["connections"]:
-        try:
-            conn = get_connection()
-            with conn.session as session:
-                session.execute(text("""
-                    CREATE TABLE IF NOT EXISTS agente_logs (
-                        id SERIAL PRIMARY KEY,
-                        data_hora TIMESTAMP,
-                        pergunta TEXT,
-                        resposta TEXT
-                    )
-                """))
-                session.execute(text("""
-                    INSERT INTO agente_logs (data_hora, pergunta, resposta)
-                    VALUES (:dh, :p, :r)
-                """), {"dh": agora, "p": pergunta, "r": resposta})
-                session.commit()
-            return
-        except Exception as e:
-            print(f"Não foi possível salvar o log no Postgres: {e}")
-
-    # 2. Fallback: Salva num arquivo .csv local se o banco não responder
+def _segredo(chave: str, padrao=None):
     try:
-        with open("logs_agente_datasus.csv", "a", encoding="utf-8") as f:
-            p_limpa = pergunta.replace('\n', ' ')
-            r_limpa = resposta.replace('\n', ' ')
-            dh_str = agora.strftime("%Y-%m-%d %H:%M:%S")
-            f.write(f"{dh_str}|{p_limpa}|{r_limpa}\n")
-    except Exception:
+        return st.secrets.get(chave, padrao)
+    except Exception:  # sem secrets.toml
+        return padrao
+
+
+def _config_llm() -> dict:
+    provedor = str(_segredo("LLM_PROVIDER", "groq")).lower()
+    return {"provedor": provedor, "modelo": _segredo("LLM_MODEL"), "api_key": _segredo("GROQ_API_KEY"),
+            "regiao": _segredo("AWS_DEFAULT_REGION", "us-east-1")}
+
+
+@st.cache_resource(show_spinner=False)
+def _llm(provedor: str, modelo, api_key, regiao):
+    return criar_llm({"provedor": provedor, "modelo": modelo, "api_key": api_key, "regiao": regiao})
+
+
+@st.cache_data(show_spinner=False)
+def _prompt() -> str:
+    return montar_prompt(consultar)
+
+
+def _normalizar(t: str) -> str:
+    t = "".join(c for c in unicodedata.normalize("NFD", t.lower()) if unicodedata.category(c) != "Mn")
+    return " ".join(t.split())
+
+
+@st.cache_data(ttl=6 * 3600, max_entries=200, show_spinner=False)
+def _resposta_em_cache(pergunta_normalizada: str, pergunta: str, provedor: str, modelo, api_key, regiao):
+    """Perguntas repetidas (sem histórico) não gastam a cota do provedor de novo."""
+    return responder(pergunta, _llm(provedor, modelo, api_key, regiao), consultar, _prompt())
+
+
+def salvar_log(pergunta: str, resposta: str) -> None:
+    """Grava em agente_logs no PostgreSQL, se configurado; senão, num CSV local (logs/)."""
+    agora = datetime.datetime.now()
+    try:
+        if "connections" in st.secrets and "postgresql" in st.secrets["connections"]:
+            conn = st.connection("postgresql", type="sql")
+            with conn.session as s:
+                s.execute(text("""CREATE TABLE IF NOT EXISTS agente_logs (
+                                    id SERIAL PRIMARY KEY, data_hora TIMESTAMP, pergunta TEXT, resposta TEXT)"""))
+                s.execute(text("INSERT INTO agente_logs (data_hora, pergunta, resposta) VALUES (:dh, :p, :r)"),
+                          {"dh": agora, "p": pergunta, "r": resposta})
+                s.commit()
+            return
+    except Exception as exc:  # log nunca pode derrubar a resposta
+        print(f"Log no PostgreSQL falhou: {exc}")
+    try:
+        LOG_LOCAL.parent.mkdir(exist_ok=True)
+        novo = not LOG_LOCAL.exists()
+        with LOG_LOCAL.open("a", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            if novo:
+                w.writerow(["data_hora", "pergunta", "resposta"])
+            w.writerow([agora.isoformat(timespec="seconds"), pergunta, resposta])
+    except OSError:
         pass
 
 
-def render_chat_page():
+def _mostrar_consultas(resp) -> None:
+    if not resp.consultas:
+        return
+    with st.expander(f"🔎 {len(resp.consultas)} consulta(s) SQL executada(s) · {resp.segundos:.1f}s · {resp.modelo}"):
+        for i, c in enumerate(resp.consultas, 1):
+            st.code(c.sql, language="sql")
+            st.caption(f"Consulta {i}: " + (f"erro — {c.erro}" if c.erro else f"{c.linhas} linha(s)"))
+
+
+def render_chat_page() -> None:
     st.subheader("🤖 Assistente Virtual DATASUS")
-    
-    st.markdown("""
-    Bem-vindo ao Assistente Inteligente de Dados de Autorização de Internação Hospitalar! 
-    
-    Este agente utiliza Inteligência Artificial para traduzir suas perguntas em linguagem natural diretamente em consultas ao nosso banco de dados com os dados DATASUS. Com ele, você pode perguntar sobre os dados de **quantidades** e **valores** de procedimentos hospitalares de forma rápida.
+    st.markdown(
+        "Faça perguntas em português sobre as **quantidades** e os **valores** aprovados de procedimentos. "
+        "O assistente escreve e executa consultas SQL nos mesmos dados do dashboard e mostra cada consulta "
+        "usada, para você conferir de onde veio cada número."
+    )
+    st.caption("Exemplos: " + " · ".join(f"*{e}*" for e in EXEMPLOS))
 
-    ### 📖 Como extrair o melhor do Assistente?
-    Para que a Inteligência Artificial traga resultados precisos, ela precisa identificar o nome correto do procedimento médico que você deseja analisar. 
-    
-    👉 **Recomendação de Ouro:** Antes de perguntar, visite a página **Lista dos Dados Armazenados**. Lá você encontrará o nosso dicionário completo. Copie o nome do procedimento (ex: *Diagnóstico em laboratório clínico*, *Cirurgia de Mama*, *Anestesiologia*) e use-o na sua pergunta.
+    cfg = _config_llm()
+    if cfg["provedor"] == "groq" and not cfg["api_key"]:
+        st.info("O assistente não está configurado neste ambiente: falta `GROQ_API_KEY` nos secrets "
+                "(chave gratuita em console.groq.com). O restante do dashboard funciona normalmente.")
+        return
 
-    ### 💡 Exemplos de Perguntas
-    Seja específico quanto ao que deseja (quantidade ou valor) e o período:
-    * *"Qual foi o valor total gasto com [NOME DO PROCEDIMENTO] no ano de 2023?"*
-    * *"Mostre a quantidade de internações para [NOME DO PROCEDIMENTO] realizadas em 2022."*
-    * *"Qual município teve o maior gasto com [NOME DO PROCEDIMENTO]?"*
+    limite = int(_segredo("LIMITE_PERGUNTAS_SESSAO", 15))
+    st.session_state.setdefault("chat_messages", [])
+    st.session_state.setdefault("chat_perguntas", 0)
 
-    ---
-    *Nota: Consultas mais amplas ou cruzamentos complexos podem levar alguns segundos a mais, pois o agente criará as fórmulas matemáticas em tempo real para te responder.*
-    """)
-    
-    if "chat_messages" not in st.session_state:
-        st.session_state.chat_messages = []
-
-    for msg in st.session_state.chat_messages[-4:]:
+    for msg in st.session_state.chat_messages[-6:]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+            if msg.get("resposta") is not None:
+                _mostrar_consultas(msg["resposta"])
 
-    user_question = st.chat_input("Ex: Qual o valor total gasto por ano?")
-    if user_question:
-        st.session_state.chat_messages.append({"role": "user", "content": user_question})
-        with st.chat_message("user"): 
-            st.markdown(user_question)
+    pergunta = st.chat_input("Ex: Qual o valor total gasto por ano?")
+    if not pergunta:
+        return
+    if st.session_state.chat_perguntas >= limite:
+        st.warning(f"Limite de {limite} perguntas por sessão atingido (protege a cota gratuita do modelo). "
+                   "Recarregue a página para começar uma nova sessão.")
+        return
 
-        with st.chat_message("assistant"):
-            st_callback = StreamlitCallbackHandler(st.container(), expand_new_thoughts=False)
-            try:
-                agent = get_sql_agent()
-                result = agent.invoke({"input": user_question}, {"callbacks": [st_callback]})
-                answer = result.get("output", "Desculpe, não consegui encontrar a resposta.")
-                
-                st.markdown(answer)
-                st.session_state.chat_messages.append({"role": "assistant", "content": answer})
-                
-                salvar_log_interacao(user_question, answer)
+    st.session_state.chat_perguntas += 1
+    historico = [{"role": m["role"], "content": m["content"]} for m in st.session_state.chat_messages[-4:]]
+    st.session_state.chat_messages.append({"role": "user", "content": pergunta})
+    with st.chat_message("user"):
+        st.markdown(pergunta)
 
-            except Exception as e:
-                erro_msg = "Infelizmente, ocorreu um erro ao buscar os dados. Tente reformular a pergunta."
-                st.error(erro_msg)
-                salvar_log_interacao(user_question, f"ERRO: {e}")
+    with st.chat_message("assistant"):
+        try:
+            with st.spinner("Consultando os dados..."):
+                args = (cfg["provedor"], cfg["modelo"], cfg["api_key"], cfg["regiao"])
+                if historico:
+                    resp = responder(pergunta, _llm(*args), consultar, _prompt(), historico)
+                else:
+                    resp = _resposta_em_cache(_normalizar(pergunta), pergunta, *args)
+        except Exception as exc:
+            nome = type(exc).__name__
+            if "RateLimit" in nome or "429" in str(exc):
+                aviso = "A cota gratuita do modelo foi atingida no momento. Tente de novo em alguns minutos."
+            elif "GraphRecursion" in nome:
+                aviso = "A pergunta exigiu passos demais. Tente ser mais específico (período, local, procedimento)."
+            else:
+                aviso = "Não consegui responder agora. Tente reformular a pergunta."
+            st.error(aviso)
+            salvar_log(pergunta, f"ERRO: {nome}: {exc}"[:2000])
+            st.session_state.chat_messages.append({"role": "assistant", "content": aviso})
+            return
+        st.markdown(resp.texto)
+        _mostrar_consultas(resp)
+    st.session_state.chat_messages.append({"role": "assistant", "content": resp.texto, "resposta": resp})
+    salvar_log(pergunta, resp.texto)

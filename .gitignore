@@ -19,5 +19,6 @@ ENV/
 # Cache Python
 __pycache__/
 
-# Banco local do assistente IA
-data/banco_ia.duckdb
+
+# logs locais do assistente
+logs/
