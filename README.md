@@ -16,7 +16,7 @@ Dashboard interativo em **Streamlit** sobre os procedimentos aprovados no **SIH/
 | Staging e produção | 50 tabelas de staging, limpeza (IGNORADO, código IBGE, separadores) e carga das matrizes `aih_qtd` e `aih_vl` com tipagem forte | SQLite → PostgreSQL (IESB) |
 | Dados do app | Snapshot das tabelas de produção em Parquet, com municípios, UF e região do IBGE | `scripts/atualizar_dados.py` |
 | Consulta | SQL direto sobre os Parquet, só com as colunas e linhas do recorte | DuckDB (somente leitura) |
-| Dashboard | Filtros Ano → Mês → UF → Município (abre no mês mais recente, no DF), KPIs com delta, estatísticas descritivas, 6 gráficos, export CSV | Streamlit + Plotly |
+| Dashboard | Filtros Ano → Mês → UF → Município (abre com todos os dados), KPIs com delta, estatísticas descritivas, 6 gráficos, export CSV | Streamlit + Plotly |
 | Assistente | Agente com *tool calling* que consulta os dados e mostra cada SQL executado | LangChain `create_agent` + Groq |
 
 ---
