@@ -16,7 +16,7 @@ Dashboard interativo em **Streamlit** sobre os procedimentos aprovados no **SIH/
 | Staging e produção | 50 tabelas de staging, limpeza (IGNORADO, código IBGE, separadores) e carga das matrizes `aih_qtd` e `aih_vl` com tipagem forte | SQLite → PostgreSQL (IESB) |
 | Dados do app | Snapshot das tabelas de produção em Parquet, com municípios, UF e região do IBGE | `scripts/atualizar_dados.py` |
 | Consulta | SQL direto sobre os Parquet, só com as colunas e linhas do recorte | DuckDB (somente leitura) |
-| Dashboard | Filtros Ano → Mês → UF → Município, KPIs com delta, estatísticas descritivas, 6 gráficos, export CSV | Streamlit + Plotly |
+| Dashboard | Filtros Ano → Mês → UF → Município (abre no mês mais recente, no DF), KPIs com delta, estatísticas descritivas, 6 gráficos, export CSV | Streamlit + Plotly |
 | Assistente | Agente com *tool calling* que consulta os dados e mostra cada SQL executado | LangChain `create_agent` + Groq |
 
 ---
@@ -75,7 +75,7 @@ O script regrava `data/` (matrizes em Parquet, municípios com UF e região, dic
 
 ### Publicar no Streamlit Community Cloud
 
-Aponte o app para `app.py` e cole o conteúdo do `secrets.toml` em *Settings > Secrets*.
+Aponte o app para o repositório `caiorj2004/aih_sus`, branch **`main`**, arquivo `app.py`, e cole o conteúdo do `secrets.toml` em *Settings > Secrets*. A CI testa em Python 3.12 e 3.14 (a versão que o Community Cloud usa hoje).
 
 ---
 
