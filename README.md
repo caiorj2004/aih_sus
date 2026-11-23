@@ -4,7 +4,7 @@
 
 Dashboard interativo em **Streamlit** sobre os procedimentos aprovados no **SIH/SUS** (DATASUS), com um **assistente de IA** que responde perguntas em português escrevendo e executando consultas SQL nos mesmos dados. Trabalho acadêmico do curso de Ciência de Dados e IA do IESB.
 
-**App publicado:** https://cyurdu4dy3ksuvvs9rlwbj.streamlit.app/
+**App publicado:** https://aihsus-nf7jpftw8cba5pcupt6uoo.streamlit.app/
 
 ---
 
