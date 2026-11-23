@@ -10,11 +10,15 @@ jobs:
   testes:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      matrix:
+        # 3.14 é a versão que o Streamlit Community Cloud usa hoje (log do deploy)
+        python-version: ["3.12", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: pip
       - run: pip install -r requirements.txt pytest
       - name: Testes (dados, trava de SQL e agente com modelo falso)

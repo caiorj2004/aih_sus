@@ -24,6 +24,7 @@ from dados import (
     load_municipality_options,
     month_to_num,
     previous_period,
+    ultimo_periodo,
 )
 from pagina_chat import render_chat_page
 
@@ -274,6 +275,9 @@ with st.sidebar:
 
     if _db_error is None and _years and _months and _uf_options is not None:
         st.header("Filtros")
+        # Filtros independentes (sem formulário): cada mudança atualiza o painel na hora, e a lista de
+        # municípios acompanha a UF escolhida. O app abre no mês mais recente com dados, no DF.
+        _ano_recente, _mes_recente = ultimo_periodo()
         uf_label_to_code = {
             f"{row.uf_sigla} — {row.uf_nome}": row.uf_codigo
             for row in _uf_options.itertuples(index=False)
@@ -281,29 +285,20 @@ with st.sidebar:
         _uf_labels = list(uf_label_to_code.keys())
         _uf_default = [lbl for lbl in _uf_labels if lbl.startswith("DF ")] or _uf_labels[:1]
 
-        with st.form("sidebar_filters"):
-            selected_years = st.multiselect("Ano", options=_years, default=_years[-1:])
-            selected_months = st.multiselect("Mês", options=_months, default=_months)
-            selected_uf_labels = st.multiselect("Unidade da Federação (UF)", options=_uf_labels,
-                                                default=_uf_default)
-            _form_submitted = st.form_submit_button("🔍 Aplicar Filtros e Atualizar Dashboard")
-
-        if _form_submitted or "_submitted_ufs" not in st.session_state:
-            st.session_state["_submitted_ufs"] = tuple(uf_label_to_code[lbl] for lbl in selected_uf_labels)
-            st.session_state["last_submitted_years"] = tuple(selected_years)
-            st.session_state["last_submitted_months"] = tuple(selected_months)
-
-        selected_ufs = st.session_state["_submitted_ufs"]
-        selected_years = list(st.session_state["last_submitted_years"])
-        selected_months = list(st.session_state["last_submitted_months"])
+        selected_years = st.multiselect("Ano", options=_years, default=[_ano_recente], key="f_ano")
+        selected_months = st.multiselect("Mês", options=_months, default=[_mes_recente], key="f_mes")
+        selected_uf_labels = st.multiselect("Unidade da Federação (UF)", options=_uf_labels,
+                                            default=_uf_default, key="f_uf")
+        selected_ufs = tuple(uf_label_to_code[lbl] for lbl in selected_uf_labels)
 
         municipio_options_df = load_municipality_options(selected_ufs)
         municipio_label_to_code = {
             f"{row.municipio_nome} ({row.cod_municipio})": row.cod_municipio
             for row in municipio_options_df.itertuples(index=False)
         }
-        selected_mun_labels = st.multiselect("Município (Opcional)", options=list(municipio_label_to_code.keys()),
-                                             default=[], key="mun_filter")
+        selected_mun_labels = st.multiselect("Município (opcional; vazio = todos da UF)",
+                                             options=list(municipio_label_to_code.keys()),
+                                             default=[], key="f_mun")
         selected_municipios = tuple(municipio_label_to_code[label] for label in selected_mun_labels)
 
     st.caption(
