@@ -18,18 +18,13 @@ Com LLM_PROVIDER = "bedrock", as credenciais vêm da cadeia padrão da AWS (AWS_
 AWS_SECRET_ACCESS_KEY e AWS_DEFAULT_REGION nos secrets), de preferência de um usuário IAM com
 chave permanente e só a permissão do Bedrock.
 """
-import csv
-import datetime
 import unicodedata
-from pathlib import Path
 
 import streamlit as st
-from sqlalchemy import text
 
 from assistente import criar_llm, montar_prompt, responder
 from dados import consultar
-
-LOG_LOCAL = Path(__file__).parent / "logs" / "agente_logs.csv"
+from registro_logs import destino_configurado, salvar_log
 EXEMPLOS = [
     "Qual o valor total gasto por ano?",
     "Quais as 5 UFs com maior valor em cirurgias do aparelho circulatório em 2025?",
@@ -71,31 +66,12 @@ def _resposta_em_cache(pergunta_normalizada: str, pergunta: str, provedor: str, 
     return responder(pergunta, _llm(provedor, modelo, api_key, regiao), consultar, _prompt())
 
 
-def salvar_log(pergunta: str, resposta: str) -> None:
-    """Grava em agente_logs no PostgreSQL, se configurado; senão, num CSV local (logs/)."""
-    agora = datetime.datetime.now()
-    try:
-        if "connections" in st.secrets and "postgresql" in st.secrets["connections"]:
-            conn = st.connection("postgresql", type="sql")
-            with conn.session as s:
-                s.execute(text("""CREATE TABLE IF NOT EXISTS agente_logs (
-                                    id SERIAL PRIMARY KEY, data_hora TIMESTAMP, pergunta TEXT, resposta TEXT)"""))
-                s.execute(text("INSERT INTO agente_logs (data_hora, pergunta, resposta) VALUES (:dh, :p, :r)"),
-                          {"dh": agora, "p": pergunta, "r": resposta})
-                s.commit()
-            return
-    except Exception as exc:  # log nunca pode derrubar a resposta
-        print(f"Log no PostgreSQL falhou: {exc}")
-    try:
-        LOG_LOCAL.parent.mkdir(exist_ok=True)
-        novo = not LOG_LOCAL.exists()
-        with LOG_LOCAL.open("a", encoding="utf-8", newline="") as f:
-            w = csv.writer(f)
-            if novo:
-                w.writerow(["data_hora", "pergunta", "resposta"])
-            w.writerow([agora.isoformat(timespec="seconds"), pergunta, resposta])
-    except OSError:
-        pass
+def _registrar(pergunta: str, resposta: str) -> None:
+    """Grava a conversa e avisa na tela se o banco falhou (antes a falha era silenciosa)."""
+    r = salvar_log(pergunta, resposta)
+    if r.erro:
+        st.toast(f"O log desta conversa não foi gravado no banco ({r.erro.split(':')[0]}); "
+                 f"ficou no {r.destino}. Detalhes nos logs do app.", icon="⚠️")
 
 
 def _mostrar_consultas(resp) -> None:
@@ -115,6 +91,11 @@ def render_chat_page() -> None:
         "usada, para você conferir de onde veio cada número."
     )
     st.caption("Exemplos: " + " · ".join(f"*{e}*" for e in EXEMPLOS))
+    if destino_configurado() == "postgresql":
+        st.caption("📝 As conversas são registradas na tabela `agente_logs` do PostgreSQL.")
+    else:
+        st.caption("📝 Sem `[connections.postgresql]` nos secrets: as conversas ficam num arquivo local, "
+                   "que se perde quando o app reinicia.")
 
     cfg = _config_llm()
     if cfg["provedor"] == "groq" and not cfg["api_key"]:
@@ -163,10 +144,10 @@ def render_chat_page() -> None:
             else:
                 aviso = "Não consegui responder agora. Tente reformular a pergunta."
             st.error(aviso)
-            salvar_log(pergunta, f"ERRO: {nome}: {exc}"[:2000])
+            _registrar(pergunta, f"ERRO: {nome}: {exc}"[:2000])
             st.session_state.chat_messages.append({"role": "assistant", "content": aviso})
             return
         st.markdown(resp.texto)
         _mostrar_consultas(resp)
     st.session_state.chat_messages.append({"role": "assistant", "content": resp.texto, "resposta": resp})
-    salvar_log(pergunta, resp.texto)
+    _registrar(pergunta, resp.texto)
