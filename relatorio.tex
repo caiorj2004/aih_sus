@@ -81,7 +81,7 @@ tabsize=2
 \tableofcontents
 
 \chapter{Introdução}
-O sistema de saúde pública brasileiro, gerido pelo Sistema Único de Saúde (SUS), produz um volume colossal de dados diariamente. Entre as fontes mais ricas e vitais para o planeamento e auditoria em saúde está o Sistema de Informações Hospitalares (SIH/SUS), especificamente as Autorizações de Internação Hospitalar (AIH). Este repositório guarda informações sobre os procedimentos realizados, quantidades aprovadas e os respetivos valores financeiros repassados aos municípios.
+O sistema de saúde pública brasileiro, gerido pelo Sistema Único de Saúde (SUS), produz um volume colossal de dados diariamente. Entre as fontes mais ricas e vitais para o planejamento e auditoria em saúde está o Sistema de Informações Hospitalares (SIH/SUS), especificamente as Autorizações de Internação Hospitalar (AIH). Esse sistema registra os procedimentos realizados, quantidades aprovadas e os respectivos valores financeiros repassados aos municípios.
 
 Este relatório técnico tem como objetivo documentar, de forma detalhada, toda a engenharia de dados aplicada na construção de um fluxo automatizado (Pipeline) capaz de extrair, tratar, consolidar e disponibilizar estes dados para análise estratégica. O projeto abrange desde o desenvolvimento de um web scraper assíncrono para contornar as limitações de interface do DATASUS, passando pelo tratamento de anomalias estruturais e numéricas, até a persistência final em um banco de dados relacional \textit{PostgreSQL} na Instituição de Ensino Superior de Brasília (IESB).
 
@@ -101,12 +101,12 @@ O script foi concebido para iterar sobre 25 meses históricos e sobre as duas m�
 
 Durante o processo de extração, três obstáculos críticos ameaçaram a integridade da coleta, exigindo soluções de engenharia específicas:
 
-\subsection{Desselação Involuntária de Elementos Padrão}
-O TabNet frequentemente pré-seleciona o mês mais recente (ex: Jan/2026). Nas primeiras iterações do robô, o envio do comando de seleção para este mês atuava como um \textit{toggle}, desmarcando a opção e resultando numa consulta vazia.
-A solução foi injetar código JavaScript via \texttt{page.evaluate()} para aceder às propriedades nativas do \textit{Node} HTML, verificando dinamicamente se o estado \texttt{node.selected} já era verdadeiro antes de disparar o clique.
+\subsection{Desmarcação Involuntária de Elementos Padrão}
+O TabNet frequentemente pré-seleciona o mês mais recente (ex: Jan/2026). Nas primeiras iterações do robô, o envio do comando de seleção para este mês atuava como um \textit{toggle}, desmarcando a opção e resultando em uma consulta vazia.
+A solução foi injetar código JavaScript via \texttt{page.evaluate()} para acessar às propriedades nativas do \textit{Node} HTML, verificando dinamicamente se o estado \texttt{node.selected} já era verdadeiro antes de disparar o clique.
 
 \subsection{Ambiguidade de IDs no DOM (Document Object Model)}
-Ao tentar forçar a exportação dos dados no formato de "Colunas separadas por ponto e vírgula (;)", o robô falhava repetidamente. A análise do código-fonte do DATASUS revelou uma grave violação de padrões web: os botões de rádio (radio buttons) partilhavam o mesmo identificador (\texttt{id="F"}).
+Ao tentar forçar a exportação dos dados no formato de "Colunas separadas por ponto e vírgula (;)", o robô falhava repetidamente. A análise do código-fonte do DATASUS revelou uma grave violação de padrões web: os botões de rádio (radio buttons) compartilhavam o mesmo identificador (\texttt{id="F"}).
 Para contornar esta ambiguidade que confundia os localizadores do Playwright, a estratégia foi alterada para a busca baseada no atributo de valor único (\texttt{input[value="prn"]}).
 
 \subsection{Despacho de Eventos (Event Dispatching)}
@@ -119,14 +119,14 @@ A captura dos resultados foi realizada de forma robusta interceptando o evento d
 \section{Arquitetura do SQLite face a SGBDs Tradicionais}
 Para compreender a arquitetura do pipeline construído, é vital diferenciar a natureza da persistência local utilizada inicialmente contra a persistência de produção.
 
-Sistemas Gerenciadores de Bancos de Dados (SGBDs) tradicionais, como \textbf{PostgreSQL, Oracle e MySQL}, operam sob um paradigma de \textit{arquitetura cliente-servidor}. Nestes sistemas, o banco de dados é um processo em segundo plano contínuo (daemon/serviço) executado numa máquina dedicada (ou num \textit{cluster}). Qualquer interação com os dados exige a abertura de um socket de rede, utilização de protocolos TCP/IP, autenticação rígida de credenciais e o gerir de complexos mecanismos de concorrência e transações (como o MVCC - \textit{Multiversion Concurrency Control}).
+Sistemas Gerenciadores de Bancos de Dados (SGBDs) tradicionais, como \textbf{PostgreSQL, Oracle e MySQL}, operam sob um paradigma de \textit{arquitetura cliente-servidor}. Nestes sistemas, o banco de dados é um processo em segundo plano contínuo (daemon/serviço) executado em uma máquina dedicada (ou em um \textit{cluster}). Qualquer interação com os dados exige a abertura de um socket de rede, utilização de protocolos TCP/IP, autenticação rígida de credenciais e a gestão de complexos mecanismos de concorrência e transações (como o MVCC - \textit{Multiversion Concurrency Control}).
 
-Por outro lado, o \textbf{SQLite} não é um SGBD cliente-servidor, mas sim uma biblioteca C embutida (\textit{embedded}). Ele adota o paradigma \textit{serverless} (sem servidor). Todo o banco de dados — esquemas, tabelas, índices e registos — é encapsulado num único ficheiro comum no disco local (neste projeto, o ficheiro \texttt{hospitalar.db}). O motor SQL interage diretamente com o armazenamento do sistema operacional, dispensando configurações de rede e autenticações intermédias.
+Por outro lado, o \textbf{SQLite} não é um SGBD cliente-servidor, mas sim uma biblioteca C embutida (\textit{embedded}). Ele adota o paradigma \textit{serverless} (sem servidor). Todo o banco de dados — esquemas, tabelas, índices e registros — é encapsulado em um único arquivo comum no disco local (neste projeto, o arquivo \texttt{hospitalar.db}). O motor SQL interage diretamente com o armazenamento do sistema operacional, dispensando configurações de rede e autenticações intermediárias.
 
 \subsection{A Diferença na Tipagem de Dados}
-Outra divergência drástica entre os modelos reside na tipagem. SGBDs tradicionais aplicam \textbf{Tipagem Estática e Rigorosa}. No PostgreSQL, por exemplo, se uma coluna é declarada como \texttt{INTEGER}, qualquer tentativa de inserir um caractere de texto (como o hífen "-" utilizado pelo DATASUS para dados zerados) resultará numa falha imediata e erro de transação.
+Outra divergência drástica entre os modelos reside na tipagem. SGBDs tradicionais aplicam \textbf{Tipagem Estática e Rigorosa}. No PostgreSQL, por exemplo, se uma coluna é declarada como \texttt{INTEGER}, qualquer tentativa de inserir um caractere de texto (como o hífen "-" utilizado pelo DATASUS para dados zerados) resultará em uma falha imediata e erro de transação.
 
-O SQLite, paradoxalmente para o ecossistema relacional, implementa \textbf{Tipagem Dinâmica} (conhecida como \textit{Manifest Typing}). No SQLite, o tipo do dado é propriedade do valor em si, e não do contentor (coluna). Isto significa que é possível armazenar strings, números reais ou nulos na mesma coluna sem restrições impeditivas graves.
+O SQLite, paradoxalmente para o ecossistema relacional, implementa \textbf{Tipagem Dinâmica} (conhecida como \textit{Manifest Typing}). No SQLite, o tipo do dado é propriedade do valor em si, e não do recipiente (coluna). Isto significa que é possível armazenar strings, números reais ou nulos na mesma coluna sem restrições impeditivas graves.
 
 \section{O Uso do SQLite como Staging Area}
 Esta flexibilidade do SQLite foi explorada como uma vantagem tática. Durante a fase de raspagem de dados (scraping), o SQLite foi utilizado como uma \textbf{Staging Area} (Área de Pouso/Preparação) dentro do ambiente do Google Colab.
@@ -134,23 +134,23 @@ Esta flexibilidade do SQLite foi explorada como uma vantagem tática. Durante a 
 As vantagens desta abordagem foram:
 \begin{enumerate}
 \item \textbf{Latência Zero:} Ao evitar a conexão com um SGBD remoto (cliente-servidor), o script de extração conseguiu injetar dezenas de tabelas e milhares de linhas instantaneamente, sem o \textit{overhead} de rede.
-\item \textbf{Ingestão Tolerante a Falhas:} A tipagem dinâmica do SQLite permitiu o descarregamento das tabelas "sujas" do DATASUS (com hífens e vírgulas) na sua forma bruta, adiando o rigor do tratamento de dados para uma etapa posterior de refinamento através da biblioteca Pandas.
+\item \textbf{Ingestão Tolerante a Falhas:} A tipagem dinâmica do SQLite permitiu o carregamento das tabelas "sujas" do DATASUS (com hífens e vírgulas) na sua forma bruta, adiando o rigor do tratamento de dados para uma etapa posterior de refinamento através da biblioteca Pandas.
 \end{enumerate}
 
 \section{O Problema da Colisão de Schema}
-A arquitetura inicial tentava armazenar todos os dados extraídos diretamente numa tabela monolítica única no SQLite. Este modelo falhou criticamente (erro: \textit{table producao\_hospitalar has no column named 0417 Anestesiologia}).
+A arquitetura inicial tentava armazenar todos os dados extraídos diretamente em uma tabela monolítica única no SQLite. Este modelo falhou criticamente (erro: \textit{table producao\_hospitalar has no column named 0417 Anestesiologia}).
 
-A análise da falha revelou que o erro ocorreu por uma sobreposição procedimental: durante a iteração do robô, tentou-se inserir os dados referentes à métrica de "Valor aprovado" utilizando a mesma estrutura de colunas (parâmetros) que havia sido moldada instantes antes pela métrica de "Quantidade aprovada". Como a disposição, a taxonomia e os identificadores das colunas extraídas divergem entre métricas volumétricas e financeiras no TabNet, ocorreu uma colisão estrutural. O banco de dados bloqueou a operação ao detetar que o novo lote de dados (valores) não se alinhava com o \textit{schema} monolítico previamente estabelecido pelas quantidades.
+A análise da falha revelou que o erro ocorreu por uma sobreposição procedimental: durante a iteração do robô, tentou-se inserir os dados referentes à métrica de "Valor aprovado" utilizando a mesma estrutura de colunas (parâmetros) que havia sido moldada instantes antes pela métrica de "Quantidade aprovada". Como a disposição, a taxonomia e os identificadores das colunas extraídas divergem entre métricas volumétricas e financeiras no TabNet, ocorreu uma colisão estrutural. O banco de dados bloqueou a operação ao detectar que o novo lote de dados (valores) não se alinhava com o \textit{schema} monolítico previamente estabelecido pelas quantidades.
 
 \section{Estratégia Table-per-Period}
-Para preservar a fidelidade dos dados brutos e contornar a colisão de schemas, a arquitetura foi refatorada. O robô passou a gerar uma tabela individual e completamente autónoma no SQLite para cada mês e cada métrica (ex: \texttt{Jan\_2026\_Quantidade\_aprovada}). Isso gerou 50 tabelas independentes, garantindo que não houvesse colisão de colunas durante a fase de extração.
+Para preservar a fidelidade dos dados brutos e contornar a colisão de schemas, a arquitetura foi refatorada. O robô passou a gerar uma tabela individual e completamente autônoma no SQLite para cada mês e cada métrica (ex: \texttt{Jan\_2026\_Quantidade\_aprovada}). Isso gerou 50 tabelas independentes, garantindo que não houvesse colisão de colunas durante a fase de extração.
 
 \chapter{Tratamento, Engenharia de Dados e Limpeza}
 
 Com as tabelas isoladas salvas com segurança na \textit{Staging Area} (SQLite), iniciou-se um extenso fluxo de tratamento utilizando \texttt{Pandas}.
 
 \section{Consolidação e Outer Join}
-O agrupamento das 50 tabelas em duas grandes matrizes (\texttt{aih\_qtd} para quantidades e \texttt{aih\_vl} para valores) foi orquestrado utilizando o método \texttt{pd.concat()} com junção externa (\textit{outer join}). Este método inteligentemente funde as colunas divergentes: se um procedimento só foi registado em fevereiro, ele é adicionado à matriz final, e os registos de janeiro para esse procedimento são preenchidos com \texttt{NaN} (posteriormente convertidos para zero).
+O agrupamento das 50 tabelas em duas grandes matrizes (\texttt{aih\_qtd} para quantidades e \texttt{aih\_vl} para valores) foi orquestrado utilizando o método \texttt{pd.concat()} com junção externa (\textit{outer join}). Este método inteligentemente funde as colunas divergentes: se um procedimento só foi registrado em fevereiro, ele é adicionado à matriz final, e os registros de janeiro para esse procedimento são preenchidos com \texttt{NaN} (posteriormente convertidos para zero).
 
 \section{Saneamento Geográfico e Identidade}
 Os dados brutos apresentavam inconsistências severas:
@@ -160,14 +160,14 @@ Os dados brutos apresentavam inconsistências severas:
 \end{enumerate}
 
 \section{Padronização e Tratamento Numérico}
-Dois bugs paralisantes foram resolvidos nesta etapa:
+Dois problemas críticos foram resolvidos nesta etapa:
 \begin{itemize}
-\item \textbf{Padronização de Nomes:} As colunas geradas possuíam espaços e caracteres especiais. Reteve-se apenas os 4 dígitos iniciais aplicando prefixos, originando colunas como \texttt{qtd\_0416} e \texttt{vl\_0416}.
+\item \textbf{Padronização de Nomes:} As colunas geradas possuíam espaços e caracteres especiais. Foram mantidos apenas os 4 dígitos iniciais, com prefixos, originando colunas como \texttt{qtd\_0416} e \texttt{vl\_0416}.
 \item \textbf{Anomalias de Tipagem (Hífens e Vírgulas):} O DATASUS utiliza hífens ("-") para representar zeros e vírgulas (",") como separadores decimais. O script foi forçado a limpar estes caracteres via \texttt{str.replace()}, antes de aplicar coerção numérica rigorosa via \texttt{pd.to\_numeric()}, preparando as bases para o PostgreSQL.
 \end{itemize}
 
 \section{Dicionário de Dados e Mapeamento de Colunas}
-A padronização dos cabeçalhos resultou num esquema estruturado e amigável para consultas SQL. Para documentar a linhagem dos dados (\textit{Data Lineage}) e facilitar a compreensão da taxonomia dos procedimentos médicos, apresenta-se o Dicionário de Dados, mapeando as colunas originais do DATASUS para o formato final persistido no PostgreSQL.
+A padronização dos cabeçalhos resultou em um esquema estruturado e amigável para consultas SQL. Para documentar a linhagem dos dados (\textit{Data Lineage}) e facilitar a compreensão da taxonomia dos procedimentos médicos, apresenta-se o Dicionário de Dados, mapeando as colunas originais do DATASUS para o formato final persistido no PostgreSQL.
 
 As colunas de controle e metadados são comuns a ambas as matrizes (Quantidade e Valor):
 \begin{itemize}
@@ -337,16 +337,16 @@ banco de dados via protocolo TCP/IP.
 
 \section{Criação do Repositório e Estrutura do Projeto}
 
-O código-fonte da aplicação foi versionado e publicado numa plataforma de controlo de
+O código-fonte da aplicação foi versionado e publicado em uma plataforma de controle de
 versões distribuída (\textit{Git/GitHub}), sob o repositório
-\texttt{caiorj2004/aih\_sp}. A adoção do controlo de versões é uma prática
+\texttt{caiorj2004/aih\_sp} (posteriormente renomeado para \texttt{aih\_sus}). A adoção do controle de versões é uma prática
 arquitetural indispensável, pois permite a rastreabilidade de cada alteração, a
 reversão a estados anteriores estáveis e, fundamentalmente, a integração direta com
 serviços de hospedagem como o Streamlit Cloud, que realiza o \textit{deploy}
 automaticamente a partir de um \textit{branch} designado do repositório.
 
 A estrutura de diretórios foi definida de forma minimalista, separando
-responsabilidades em ficheiros distintos:
+responsabilidades em arquivos distintos:
 
 \begin{verbatim}
 aih_sp/
@@ -370,7 +370,7 @@ princípio de responsabilidade única (\textit{Single Responsibility Principle})
     \item \texttt{app.py} — toda a lógica de interface e renderização;
     \item \texttt{db.py} — toda a comunicação com o SGBD: consultas SQL, gestão de
     conexões e \textit{cache};
-    \item \texttt{fallback.py} — leitura dos ficheiros Parquet locais utilizados
+    \item \texttt{fallback.py} — leitura dos arquivos Parquet locais utilizados
     quando o banco de dados não está acessível.
 \end{itemize}
 
@@ -382,18 +382,18 @@ tocar na camada de apresentação.
 
 Um risco crítico no desenvolvimento de aplicações que consomem serviços remotos é a
 exposição acidental de credenciais em repositórios públicos. Para mitigar este risco, o
-ficheiro \texttt{.streamlit/secrets.toml} — que contém \textit{host}, porta, nome do
-banco, utilizador e senha do PostgreSQL — foi explicitamente declarado no
+arquivo \texttt{.streamlit/secrets.toml} — que contém \textit{host}, porta, nome do
+banco, usuário e senha do PostgreSQL — foi explicitamente declarado no
 \texttt{.gitignore}, garantindo que nenhuma credencial sensível seja comprometida
 em nenhum \textit{commit}.
 
 Para o ambiente de produção (Streamlit Cloud), as credenciais são injetadas de forma
 segura através do painel da plataforma em \textbf{Settings $\rightarrow$ Secrets}, sem nunca
-transitarem pelo sistema de controlo de versões.
+transitarem pelo sistema de controle de versões.
 
 \section{Declaração de Dependências}
 
-As dependências da aplicação foram declaradas no ficheiro \texttt{requirements.txt},
+As dependências da aplicação foram declaradas no arquivo \texttt{requirements.txt},
 que é processado automaticamente pelo Streamlit Cloud durante o provisionamento do
 ambiente de execução. As bibliotecas e as restrições de versão mínima adotadas foram:
 
@@ -415,8 +415,11 @@ ambiente de execução. As bibliotecas e as restrições de versão mínima adot
     A variante \textit{binary} inclui os binários compilados estaticamente,
     eliminando a dependência de bibliotecas do sistema operacional no servidor de
     hospedagem.
-    \item \textbf{\texttt{pyarrow}} — motor de leitura de ficheiros Parquet utilizado
+    \item \textbf{\texttt{pyarrow}} — motor de leitura de arquivos Parquet utilizado
     pelo Pandas no módulo \texttt{fallback.py} (modo \textit{offline}).
+    \item \textbf{\texttt{langchain}, \texttt{langchain-community}, \texttt{langchain-aws}
+    e \texttt{boto3}} — agente de IA da aba ``Assistente IA'' e acesso ao AWS Bedrock
+    (descritos no Capítulo~\ref{cap:v2}).
 \end{itemize}
 
 \section{Módulo de Dados: \texttt{db.py}}
@@ -430,15 +433,15 @@ otimização de desempenho.
 
 A conexão ao servidor PostgreSQL é estabelecida através do mecanismo nativo de
 conexões do Streamlit (\texttt{st.connection}), que lê automaticamente o bloco
-\texttt{[connections.postgresql]} do ficheiro de \textit{secrets}. O objeto de
+\texttt{[connections.postgresql]} do arquivo de \textit{secrets}. O objeto de
 conexão retornado encapsula internamente um \textit{engine} SQLAlchemy com
 \textit{pool} de conexões, tornando o processo transparente para a camada de consulta.
 
 Para evitar que múltiplas execuções do script Streamlit — provocadas pela natureza
-reativa do \textit{framework}, que re-executa o script a cada interação do utilizador
+reativa do \textit{framework}, que re-executa o script a cada interação do usuário
 — criem conexões redundantes ao banco de dados, a função de conexão foi decorada com
 \texttt{@st.cache\_resource}. Este decorator instrui o Streamlit a manter o objeto de
-conexão como um \textit{singleton} partilhado pela sessão e por todos os utilizadores
+conexão como um \textit{singleton} compartilhado pela sessão e por todos os usuários
 simultâneos:
 
 \begin{lstlisting}[language=Python]
@@ -461,24 +464,22 @@ password = "SUA_SENHA"
 
 \subsection{Estratégias de Cache e Invalidação por TTL}
 
-Num ambiente de \textit{dashboard} analítico, as mesmas consultas são disparadas
-repetidamente a cada interação do utilizador. Para evitar sobrecarga desnecessária no
+Em um ambiente de \textit{dashboard} analítico, as mesmas consultas são disparadas
+repetidamente a cada interação do usuário. Para evitar sobrecarga desnecessária no
 SGBD, todas as funções de consulta foram decoradas com \texttt{@st.cache\_data}, que
 armazena o resultado em memória e invalida o cache após um \textit{Time-To-Live} (TTL)
 configurável:
 
 \begin{itemize}
     \item \textbf{TTL de 3600 segundos (1 hora):} aplicado às funções que consultam
-    metadados de esquema (\texttt{get\_table\_columns} e
-    \texttt{get\_dimension\_mapping}), cujo conteúdo raramente varia em produção.
-    \item \textbf{TTL de 1800 segundos (30 minutos):} aplicado às funções de
-    carregamento de opções de filtros (\texttt{load\_filter\_options} e
-    \texttt{load\_municipality\_options}), refletindo a frequência típica de
-    atualização dos dados hospitalares.
+    metadados de esquema (\texttt{get\_table\_columns}, \texttt{get\_dimension\_mapping}
+    e \texttt{get\_procedure\_columns}) e à lista de municípios por UF
+    (\texttt{load\_municipality\_options}), cujo conteúdo raramente varia em produção.
+    \item \textbf{TTL de 1800 segundos (30 minutos):} aplicado às opções dos filtros de
+    ano, mês e UF (\texttt{load\_filter\_options}).
     \item \textbf{TTL de 900 segundos (15 minutos):} aplicado às consultas de dados
-    consolidados (\texttt{load\_consolidated\_data}), totais por período
-    (\texttt{get\_period\_totals}) e colunas de procedimentos
-    (\texttt{get\_procedure\_columns}), onde maior frescor dos dados é desejável.
+    consolidados (\texttt{load\_consolidated\_data}) e aos totais por período
+    (\texttt{get\_period\_totals}), onde maior frescor dos dados é desejável.
 \end{itemize}
 
 \subsection{Segurança: \textit{Whitelist} de Tabelas e Consultas Parametrizadas}
@@ -503,7 +504,7 @@ def get_table_columns(table_name: str) -> List[str]:
 \end{lstlisting}
 
 \subsubsection*{Consultas Parametrizadas com Parâmetros Nomeados}
-Todos os valores dinâmicos fornecidos pelo utilizador (anos, meses, códigos de UF,
+Todos os valores dinâmicos fornecidos pelo usuário (anos, meses, códigos de UF,
 códigos de município) são injetados nas consultas SQL exclusivamente através de
 parâmetros nomeados do SQLAlchemy (notation \texttt{:param\_name}), nunca por
 concatenação de strings. A função utilitária \texttt{\_build\_in\_clause()} gera
@@ -589,29 +590,33 @@ with conn.session as session:
             years_set.add(str(row[0]).strip())
 \end{lstlisting}
 
-\subsection{Consulta Consolidada em Dois Estágios}
+\subsection{Consulta Consolidada com Filtragem Prévia das Dimensões}
 
 A função \texttt{load\_consolidated\_data()} executa o JOIN principal entre as quatro
 tabelas do modelo (\texttt{aih\_qtd}, \texttt{aih\_vl}, \texttt{municipios\_ibge} e
-\texttt{unidade\_federacao}). Para evitar que o PostgreSQL materialize o produto
-cartesiano das tabelas fato antes da aplicação dos filtros geográficos — operação que
-esgotaria o espaço temporário em disco para conjuntos de dados de grande cardinalidade
-— a consulta foi decomposta em dois estágios sequenciais:
+\texttt{unidade\_federacao}). Para evitar que o PostgreSQL combine as tabelas fato com
+todos os municípios antes de aplicar os filtros geográficos, a consulta começa por uma
+CTE (\texttt{filtered\_mun}) que resolve, só nas tabelas de dimensão, os municípios das
+UFs selecionadas, com seus nomes e UF. Em seguida, as tabelas fato são unidas entre si
+por ano, mês e município e com essa CTE, com os filtros de ano, mês e município na
+cláusula \texttt{WHERE}:
 
-\begin{enumerate}
-    \item \textbf{Resolução das dimensões geográficas:} uma consulta prévia,
-    exclusivamente sobre as tabelas de dimensão (\texttt{municipios\_ibge} e
-    \texttt{unidade\_federacao}), retorna a lista de \texttt{cod\_municipio} válidos
-    para as UFs e municípios selecionados pelo utilizador.
-    \item \textbf{Consulta às tabelas fato:} a lista de códigos obtida na etapa anterior
-    é utilizada como filtro direto na cláusula \texttt{WHERE} da consulta sobre
-    \texttt{aih\_qtd} e \texttt{aih\_vl}, permitindo que o PostgreSQL utilize os índices
-    sobre \texttt{cod\_municipio} e evite \textit{full table scans}.
-\end{enumerate}
+\begin{lstlisting}[language=SQL]
+WITH filtered_mun AS (
+  SELECT m.codigo_municipio AS cod_mun, m.nome_municipio AS nome_mun, ...
+  FROM municipios_ibge m LEFT JOIN unidade_federacao u ON ...
+  WHERE m.uf_codigo IN (:uf_0, :uf_1, ...)
+)
+SELECT q.ano, q.mes, q.cod_municipio, f.nome_mun, ..., q.total, v.total, ...
+FROM aih_qtd q
+INNER JOIN aih_vl v ON v.ano = q.ano AND v.mes = q.mes AND v.cod_municipio = q.cod_municipio
+INNER JOIN filtered_mun f ON f.cod_mun = q.cod_municipio
+WHERE q.ano IN (...) AND q.mes IN (...)
+\end{lstlisting}
 
-A junção final entre os dados de facto e as informações de dimensão é realizada em
-Python via \texttt{DataFrame.merge()}, após a materialização dos dois conjuntos de
-resultados, garantindo a eficiência da comunicação com o SGBD.
+As colunas de procedimento são incluídas no \texttt{SELECT} somente se existirem no
+esquema real (verificado com \texttt{get\_table\_columns()}), o que evita erros de
+coluna inexistente quando o banco diverge das listas canônicas da aplicação.
 
 \subsection{Funções Utilitárias e de Suporte}
 
@@ -620,8 +625,8 @@ de utilitários de suporte utilizados diretamente pelo módulo \texttt{app.py}:
 
 \begin{itemize}
     \item \texttt{month\_to\_num(mes)} — converte qualquer representação de mês em
-    inteiro (1--12): aceita abreviações em inglês (\textit{"Jun"}), abreviações em
-    português (\textit{"Jun"}), nomes completos em português (\textit{"junho"}) e
+    inteiro (1--12): aceita abreviações em inglês (\textit{"Feb"}), abreviações em
+    português (\textit{"Fev"}), nomes completos em português (\textit{"junho"}) e
     valores numéricos em formato \texttt{str} (\textit{"6"}). Retorna 0 para entradas
     inválidas, sem lançar exceção. Utilizada em todo o pipeline de ordenação
     cronológica do \textit{dashboard}.
@@ -653,12 +658,12 @@ Durante o desenvolvimento verificou-se que a dependência exclusiva do servidor
 PostgreSQL tornava a aplicação vulnerável a indisponibilidades de rede ou de
 infraestrutura. Para garantir resiliência operacional, foi desenvolvido o módulo
 \texttt{fallback.py}, que implementa um modo \textit{offline} completo baseado em
-ficheiros \textbf{Parquet} armazenados localmente na pasta \texttt{data/} do
+arquivos \textbf{Parquet} armazenados localmente na pasta \texttt{data/} do
 repositório.
 
 \subsection{Ficheiros Parquet}
 
-Dois ficheiros Parquet servem de fonte de dados alternativa:
+Dois arquivos Parquet servem de fonte de dados alternativa:
 
 \begin{itemize}
     \item \texttt{data/aih\_qtd\_fallback.parquet} — colunas de quantidades por
@@ -669,7 +674,7 @@ Dois ficheiros Parquet servem de fonte de dados alternativa:
     \texttt{municipio}, \texttt{vl\_*}, \texttt{total}.
 \end{itemize}
 
-Uma limitação importante: os ficheiros Parquet foram gerados a partir das exportações
+Uma limitação importante: os arquivos Parquet foram gerados a partir das exportações
 brutas do TabNet, que não inclui a dimensão de Unidade da Federação (UF). Por essa
 razão, o modo \textit{offline} opera apenas com granularidade municipal.
 
@@ -679,7 +684,7 @@ O módulo \texttt{fallback.py} oferece um conjunto de funções espelhadas às d
 \texttt{db.py}, com assinatura compatível para permitir substituição transparente:
 
 \begin{itemize}
-    \item \texttt{load\_fallback\_raw()} — lê e cacheia os dois ficheiros Parquet com
+    \item \texttt{load\_fallback\_raw()} — lê e cacheia os dois arquivos Parquet com
     \texttt{@st.cache\_data}, normalizando os tipos das colunas-chave (\texttt{ano},
     \texttt{mes}, \texttt{cod\_municipio}) para \texttt{str}.
     \item \texttt{get\_fallback\_filter\_options()} — extrai anos, meses e o DataFrame
@@ -701,7 +706,7 @@ O processo de ativação do modo \textit{offline} ocorre em duas vias:
     \item \textbf{Ativação automática por falha:} se a tentativa de conexão ao
     PostgreSQL lançar qualquer exceção (\texttt{OperationalError}, timeout ou erro de
     autenticação), o módulo \texttt{app.py} captura o erro e, imediatamente,
-    tenta carregar os ficheiros Parquet. Se bem-sucedido, o \textit{flag}
+    tenta carregar os arquivos Parquet. Se bem-sucedido, o \textit{flag}
     \texttt{\_using\_fallback} é definido como \texttt{True} e a aplicação continua
     operando em modo \textit{offline}:
 
@@ -720,8 +725,8 @@ except Exception as exc:
 
     \item \textbf{Toggle manual na barra lateral:} mesmo quando o banco de dados está
     disponível, um botão de alternância (\texttt{st.toggle}) é exibido na barra lateral
-    — desde que os ficheiros Parquet também estejam presentes. Este controlo permite
-    ao utilizador alternar voluntariamente entre os dados do servidor e os dados locais,
+    — desde que os arquivos Parquet também estejam presentes. Este controle permite
+    ao usuário alternar voluntariamente entre os dados do servidor e os dados locais,
     útil para comparar versões dos dados ou para demonstrações sem acesso à rede:
 
 \begin{lstlisting}[language=Python]
@@ -735,7 +740,7 @@ if _db_error is None and _fb_municipios is not None:
 
 Se ambas as fontes falharem, a função auxiliar \texttt{\_render\_db\_unavailable()}
 exibe uma mensagem de erro detalhada e o \textit{traceback} completo da exceção do banco,
-evitando que o utilizador receba apenas um ecrã em branco.
+evitando que o usuário receba apenas uma tela em branco.
 
 \subsection{Adaptações da Interface no Modo Offline}
 
@@ -746,7 +751,7 @@ interface são automaticamente adaptadas para refletir a ausência da dimensão 
     \item O filtro \textbf{Unidade da Federação} é removido da barra lateral; apenas
     o filtro de Município permanece disponível.
     \item Uma faixa de aviso é exibida: \textbf{Modo Offline} (se o banco falhou)
-    ou um aviso informativo (se o utilizador activou o toggle manualmente).
+    ou um aviso informativo (se o usuário ativou o toggle manualmente).
     \item No gráfico \textbf{Ranking Top 10}, o rádio de seleção de nível
     (Município / UF) é ocultado; o ranking opera exclusivamente por Município.
     \item No \textbf{Scatter Plot}, o \textit{hover} exibe apenas o nome do município,
@@ -768,7 +773,7 @@ e o dicionário de variáveis.
 
 \subsection{Configuração e Tematização}
 
-A identidade visual da aplicação foi configurada no ficheiro
+A identidade visual da aplicação foi configurada no arquivo
 \texttt{.streamlit/config.toml}, definindo uma paleta de cores corporativa (azul
 institucional \texttt{\#0066CC} como cor primária, fundo branco e texto escuro
 \texttt{\#1A1A2E}):
@@ -783,7 +788,7 @@ font                     = "sans serif"
 \end{lstlisting}
 
 \textbf{Nota:} o bloco \texttt{[server]} com a chave \texttt{enableStatistics = false}
-foi removido do ficheiro, pois essa chave foi descontinuada nas versões recentes do
+foi removido do arquivo, pois essa chave foi descontinuada nas versões recentes do
 Streamlit e passou a gerar um aviso de configuração inválida ao iniciar o servidor.
 
 A página foi configurada com layout largo (\texttt{layout="wide"}) para maximizar a
@@ -841,10 +846,11 @@ em quatro níveis, onde cada nível restringe as opções do nível subsequente:
     UFs selecionadas no nível superior.
 \end{enumerate}
 
-O filtro de UF inicializa com todas as opções pré-selecionadas por defeito
-(\texttt{default=list(uf\_label\_to\_code.keys())}), à semelhança dos seletores de
-Ano e Mês, tornando o painel imediatamente funcional na primeira carga sem necessidade
-de interação manual. Caso o utilizador desmarque todas as UFs, as três abas de dados
+Ano, Mês e UF ficam num formulário (\texttt{st.form}) com o botão ``Aplicar Filtros e
+Atualizar Dashboard'', de modo que as consultas só são disparadas quando o usuário
+confirma a seleção. O painel abre com o ano de 2026, todos os meses e a primeira UF da
+lista pré-selecionada (\texttt{default=list(uf\_label\_to\_code.keys())[:1]}), o que o
+torna funcional na primeira carga sem interação manual. Caso o usuário desmarque todas as UFs, as três abas de dados
 exibem uma mensagem de aviso, prevenindo a execução de consultas sem qualquer filtro
 geográfico sobre as tabelas fato.
 
@@ -853,12 +859,12 @@ Município é preenchido diretamente a partir do Parquet, sem dependência do Po
 
 \subsection{KPIs com Cálculo de Delta Interperiódico}
 
-A secção de KPIs do \textit{dashboard} apresenta três métricas de alto nível num
+A seção de KPIs do \textit{dashboard} apresenta três métricas de alto nível em um
 layout de três colunas (\texttt{st.columns(3)}):
 
 \begin{itemize}
     \item \textbf{Total de Procedimentos:} soma de \texttt{total\_qtd} sobre todos os
-    registos do recorte selecionado.
+    registros do recorte selecionado.
     \item \textbf{Valor Total Repassado:} soma de \texttt{total\_vl}, formatado no
     padrão monetário brasileiro (R\$ com ponto como separador de milhar e vírgula como
     separador decimal), implementado via transliteração de caracteres com
@@ -870,32 +876,38 @@ layout de três colunas (\texttt{st.columns(3)}):
 
 Cada KPI exibe adicionalmente um \textbf{delta percentual} calculado em relação ao
 período imediatamente anterior. A função \texttt{previous\_period()} implementa a
-lógica de retrocesso calendárico, tratando corretamente as transições de ano
+lógica de retrocesso no calendário, tratando corretamente as transições de ano
 (dezembro $\rightarrow$ novembro do ano corrente, janeiro $\rightarrow$ dezembro do ano anterior). Os totais
 do período anterior são consultados via \texttt{get\_period\_totals()} (ou
 \texttt{get\_fallback\_period\_totals()} em modo \textit{offline}), que aplica os mesmos
 filtros geográficos da sessão atual para garantir comparabilidade.
 
+Na versão 1, o mês anterior era montado com abreviações em inglês (por exemplo,
+``Dec''), que não existem nos dados, e o delta ficava vazio; a correção é descrita no
+Capítulo~\ref{cap:v2}.
+
 \subsection{Abas de Análise}
 
-O conteúdo do \textit{dashboard} é organizado em quatro abas
-(\texttt{st.tabs}), separando categorias distintas de informação:
+O conteúdo do \textit{dashboard} é organizado em cinco abas
+(\texttt{st.tabs}), separando categorias distintas de informação. As quatro primeiras
+são descritas a seguir; a quinta, ``Assistente IA'', é tratada no
+Capítulo~\ref{cap:v2}.
 
 \subsubsection*{Aba 0 — Introdução}
 
 A aba de introdução é sempre renderizada, mesmo antes de qualquer filtro ser
-selecionado, e não depende de conexão com o banco de dados. Apresenta quatro secções
+selecionado, e não depende de conexão com o banco de dados. Apresenta quatro seções
 principais:
 
 \begin{itemize}
     \item \textbf{Origem dos Dados} — descreve o SIH/SUS, o portal TabNet e a
     estratégia de scraping com Playwright.
     \item \textbf{Pipeline de Engenharia de Dados} — resume as três etapas
-    (Extração, Staging SQLite, Produção PostgreSQL) num layout de três colunas.
+    (Extração, Staging SQLite, Produção PostgreSQL) em um layout de três colunas.
     \item \textbf{Sobre este Aplicativo} — descreve as funcionalidades disponíveis no
     dashboard: filtros hierárquicos, KPIs, exportação CSV, estatísticas descritivas e
     gráficos analíticos.
-    \item \textbf{Modo Offline (Fallback)} — documenta ao utilizador final o
+    \item \textbf{Modo Offline (Fallback)} — documenta ao usuário final o
     comportamento da aplicação quando o banco de dados está indisponível, incluindo as
     funcionalidades que são adaptadas e as que permanecem intactas.
 \end{itemize}
@@ -908,7 +920,7 @@ numérica brasileira aplicada coluna a coluna (0 casas decimais para contagens,
 permite a exportação imediata dos dados visíveis em formato CSV com codificação UTF-8.
 
 Abaixo da tabela de dados é exibido um \textbf{Dicionário de Variáveis} dividido em
-três tabelas: colunas de controlo e metadados, colunas de quantidades (\texttt{qtd\_*})
+três tabelas: colunas de controle e metadados, colunas de quantidades (\texttt{qtd\_*})
 e colunas de valores financeiros (\texttt{vl\_*}), utilizando os rótulos do dicionário
 \texttt{COLUMN\_LABELS}.
 
@@ -920,19 +932,19 @@ adicionais: \textbf{variância} (\texttt{var()}), \textbf{assimetria}
 (\texttt{skew()}) e \textbf{curtose} (\texttt{kurt()}), produzindo uma matriz
 transposta completa formatada no locale brasileiro.
 
-Três (ou dois, em modo \textit{offline}) indicadores de cardinalidade do recorte são
-exibidos de forma destacada: número de municípios, número de UFs e número de períodos
-(combinações únicas de ano/mês) no filtro ativo.
+Dois indicadores de cardinalidade do recorte são exibidos de forma destacada: número
+de municípios e número de períodos (combinações únicas de ano/mês) no filtro ativo.
 
 \subsubsection*{Aba C — Gráficos Analíticos}
 
-Esta aba concentra cinco visualizações interativas construídas com a biblioteca
+Esta aba concentra seis visualizações interativas construídas com a biblioteca
 \textbf{Plotly}:
 
 \begin{enumerate}
-    \item \textbf{Série Temporal de Duplo Eixo:} gráfico de linhas com marcadores
-    (\texttt{go.Scatter}) com dois eixos Y independentes e seletores de coluna para
-    cada eixo. O eixo temporal é construído convertendo as colunas \texttt{ano} e
+    \item \textbf{Séries Temporais de Quantidade e de Valor:} dois gráficos de linhas
+    com marcadores (\texttt{go.Scatter}), um para a evolução da quantidade e outro para
+    a evolução do valor, cada um com seletor da coluna (total ou grupo de procedimento).
+    O eixo temporal é construído convertendo as colunas \texttt{ano} e
     \texttt{mes} em objetos \texttt{datetime} via \texttt{pd.to\_datetime()},
     ordenados cronologicamente, suportando os mesmos formatos de mês (numérico,
     abreviação inglesa ou abreviação portuguesa) tratados por \texttt{month\_to\_num()}.
@@ -952,7 +964,7 @@ Esta aba concentra cinco visualizações interativas construídas com a bibliote
 
     \item \textbf{Treemap por Categoria de Procedimento:} gráfico \textit{treemap}
     (\texttt{px.treemap}) com seleção das colunas de procedimento a incluir via
-    \texttt{st.multiselect}; as colunas excluídas são agrupadas numa categoria
+    \texttt{st.multiselect}; as colunas excluídas são agrupadas em uma categoria
     ``Outros'' cujo valor é a soma das suas contribuições ao total do recorte.
     Os percentuais exibidos são sempre relativos ao total acumulado de todas as colunas
     disponíveis, garantindo consistência ao variar a seleção.
@@ -967,8 +979,8 @@ Esta aba concentra cinco visualizações interativas construídas com a bibliote
 \section{Publicação no Streamlit Cloud}
 
 O \textit{deploy} da aplicação no Streamlit Cloud é realizado de forma contínua
-(\textit{Continuous Deployment}): qualquer \textit{push} ao \textit{branch} principal
-do repositório \texttt{caiorj2004/aih\_sp} no GitHub desencadeia automaticamente uma
+(\textit{Continuous Deployment}): qualquer \textit{push} ao \textit{branch} configurado
+no painel do repositório \texttt{caiorj2004/aih\_sp} no GitHub desencadeia automaticamente uma
 nova compilação e publicação da aplicação. O ciclo de vida do ambiente de execução é
 gerido integralmente pela plataforma, incluindo a instalação das dependências listadas
 em \texttt{requirements.txt} e a injeção das credenciais configuradas no painel de
@@ -976,7 +988,7 @@ Secrets.
 
 A integração entre o GitHub e o Streamlit Cloud é estabelecida uma única vez mediante
 autenticação OAuth, tornando o fluxo de publicação completamente transparente para o
-desenvolvedor: a modificação de qualquer ficheiro do repositório reflecte-se na
+desenvolvedor: a modificação de qualquer arquivo do repositório reflete-se na
 aplicação publicada sem intervenção manual adicional.
 
 \chapter{Versão 2: Desempenho, Dados Locais e Assistente de IA}\label{cap:v2}
@@ -991,12 +1003,12 @@ renomeado a partir de \texttt{aih\_sp}).
 
 \section{O Assistente de IA da Versão 1}
 
-A versão 1 já incluía uma aba ``Assistente IA'', não descrita no capítulo anterior: um
+A versão 1 já incluía uma aba ``Assistente IA'', apenas mencionada no capítulo anterior: um
 agente \textit{text-to-SQL} construído com a função \texttt{create\_sql\_agent} da
 biblioteca LangChain, no modo \texttt{zero-shot-react-description} (o modelo escreve o
 raciocínio e a ação em texto livre, e a biblioteca interpreta esse texto), com o modelo
 Claude Sonnet 4 acessado pelo AWS Bedrock. O agente consultava o PostgreSQL e, se o banco
-estivesse indisponível, uma cópia dos arquivos Parquet carregada num SQLite em memória.
+estivesse indisponível, uma cópia dos arquivos Parquet carregada em um SQLite em memória.
 As perguntas e respostas eram gravadas na tabela \texttt{agente\_logs}, pensada como base
 para monitoramento e melhoria contínua.
 
@@ -1150,7 +1162,7 @@ _PROIBIDO = re.compile(
     de linhas retornadas, o tempo e o modelo usado, permitindo conferir a origem de cada
     número.
     \item \textbf{Registro:} perguntas e respostas continuam sendo gravadas em
-    \texttt{agente\_logs} quando o PostgreSQL está configurado, ou num CSV local.
+    \texttt{agente\_logs} quando o PostgreSQL está configurado, ou em um CSV local.
 \end{itemize}
 
 \section{Testes, Integração Contínua e Resultados}
@@ -1183,8 +1195,8 @@ valores monetários blindados em \texttt{Numeric(20,4)}.
 
 Sobre esta base relacional robusta, foi construída e publicada uma camada de
 apresentação completa na forma de um \textit{dashboard} web interativo. A escolha do
-Streamlit como \textit{framework} permitiu condensar, num código de dimensão reduzida,
-funcionalidades que noutras \textit{stacks} exigiriam a implementação de um
+Streamlit como \textit{framework} permitiu condensar, em um código de dimensão reduzida,
+funcionalidades que em outras \textit{stacks} exigiriam a implementação de um
 \textit{backend} REST separado, uma aplicação \textit{frontend} em JavaScript e uma
 camada de autenticação independente.
 
@@ -1201,19 +1213,20 @@ A versão 2 tratou essas causas diretamente. Com o DuckDB consultando os Parquet
 somente leitura, dashboard e assistente passaram a usar a mesma fonte, sem depender de rede
 nem de credenciais; o recorte completo dos dados abre em cerca de 3 segundos e com pico de
 memória em torno de 710 MB. O assistente, com \textit{tool calling}, trava de SQL somente
-leitura e consultas exibidas ao usuário, passou a rodar num plano gratuito sem renovação
+leitura e consultas exibidas ao usuário, passou a rodar em um plano gratuito sem renovação
 manual de credenciais. Testes automatizados e integração contínua verificam, a cada
 alteração, que os números continuam iguais aos do banco de produção.
 
-A secção de gráficos analíticos evoluiu de quatro para cinco visualizações,
+A seção de gráficos analíticos chegou a seis visualizações,
 incorporando o heatmap sazonal para identificação de padrões temporais e substituindo
 o gráfico de donut por um treemap interativo com agrupamento de ``Outros''. O scatter
 plot ganhou suporte ao coeficiente de Spearman para robustez a dados com distribuição
 assimétrica — característica frequente em dados de procedimentos hospitalares, onde
 poucos municípios concentram volumes muito elevados.
 
-O conjunto do projeto — desde a extração automatizada no DATASUS até à publicação
-do \textit{dashboard} analítico — constitui um pipeline de dados de ponta-a-ponta
-completo, totalmente reprodutível e pronto para integração com ferramentas avançadas
-de \textit{Business Intelligence}.
+O conjunto do projeto — desde a extração automatizada no DATASUS até a publicação
+do \textit{dashboard} analítico — constitui um pipeline de dados de ponta a ponta,
+documentado em cada etapa, cuja camada de apresentação pode ser executada por qualquer
+pessoa a partir do repositório e pronto para integração com ferramentas de
+\textit{Business Intelligence}.
 \end{document}
