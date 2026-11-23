@@ -24,7 +24,6 @@ from dados import (
     load_municipality_options,
     month_to_num,
     previous_period,
-    ultimo_periodo,
 )
 from pagina_chat import render_chat_page
 
@@ -276,19 +275,16 @@ with st.sidebar:
     if _db_error is None and _years and _months and _uf_options is not None:
         st.header("Filtros")
         # Filtros independentes (sem formulário): cada mudança atualiza o painel na hora, e a lista de
-        # municípios acompanha a UF escolhida. O app abre no mês mais recente com dados, no DF.
-        _ano_recente, _mes_recente = ultimo_periodo()
+        # municípios acompanha a UF escolhida. O app abre com todos os dados (todos os anos, meses e UFs).
         uf_label_to_code = {
             f"{row.uf_sigla} — {row.uf_nome}": row.uf_codigo
             for row in _uf_options.itertuples(index=False)
         }
         _uf_labels = list(uf_label_to_code.keys())
-        _uf_default = [lbl for lbl in _uf_labels if lbl.startswith("DF ")] or _uf_labels[:1]
-
-        selected_years = st.multiselect("Ano", options=_years, default=[_ano_recente], key="f_ano")
-        selected_months = st.multiselect("Mês", options=_months, default=[_mes_recente], key="f_mes")
+        selected_years = st.multiselect("Ano", options=_years, default=_years, key="f_ano")
+        selected_months = st.multiselect("Mês", options=_months, default=_months, key="f_mes")
         selected_uf_labels = st.multiselect("Unidade da Federação (UF)", options=_uf_labels,
-                                            default=_uf_default, key="f_uf")
+                                            default=_uf_labels, key="f_uf")
         selected_ufs = tuple(uf_label_to_code[lbl] for lbl in selected_uf_labels)
 
         municipio_options_df = load_municipality_options(selected_ufs)

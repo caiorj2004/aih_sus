@@ -116,15 +116,6 @@ def load_filter_options() -> Tuple[List[str], List[str], pd.DataFrame]:
     return anos, meses, ufs
 
 
-@st.cache_data(show_spinner=False)
-def ultimo_periodo() -> Tuple[str, str]:
-    """(ano, mês) mais recente com dados, ex. ('2026', 'Jan'): o recorte com que o app abre."""
-    periodos = consultar("SELECT DISTINCT ano, mes FROM aih_qtd")
-    periodos["n"] = periodos["mes"].map(month_to_num)
-    ano, mes, _ = periodos.sort_values(["ano", "n"]).iloc[-1]
-    return str(ano), str(mes)
-
-
 @st.cache_data(show_spinner=False, max_entries=32)
 def load_municipality_options(selected_ufs: Tuple[str, ...]) -> pd.DataFrame:
     if not selected_ufs:

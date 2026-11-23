@@ -5,11 +5,11 @@
 \usepackage{fontspec}
 \usepackage[portuguese, bidi=basic, provide=*]{babel}
 
-\babelprovide[import, onchar=ids fonts]{portuguese}
 \babelprovide[import, onchar=ids fonts]{english}
 
 \babelfont{rm}{Noto Sans}
 \babelfont[portuguese]{rm}{Noto Sans}
+\babelfont{tt}{Noto Sans Mono} % caracteres de árvore de diretórios e setas nos blocos de código
 
 \usepackage{enumitem}
 \setlist[itemize]{label=-}
@@ -18,6 +18,7 @@
 \usepackage{amsmath}
 \usepackage{booktabs}
 \usepackage{longtable}
+\usepackage{array}
 \usepackage{graphicx}
 \usepackage{setspace}
 \usepackage{listings}
@@ -57,6 +58,8 @@ tabsize=2
 }
 
 \onehalfspacing
+\makeatletter\renewcommand\verbatim@font{\footnotesize\ttfamily}\makeatother % árvores de diretórios cabem na página
+\setlength{\emergencystretch}{3em} % evita linhas estourando a margem com nomes longos em \texttt
 
 \begin{document}
 
@@ -71,7 +74,7 @@ tabsize=2
 \large \textbf{Autor: Caio Rosendo Jácome}\\
 \vfill
 \large BRASÍLIA\\
-2024
+2026
 \end{center}
 \end{titlepage}
 
@@ -81,6 +84,8 @@ tabsize=2
 O sistema de saúde pública brasileiro, gerido pelo Sistema Único de Saúde (SUS), produz um volume colossal de dados diariamente. Entre as fontes mais ricas e vitais para o planeamento e auditoria em saúde está o Sistema de Informações Hospitalares (SIH/SUS), especificamente as Autorizações de Internação Hospitalar (AIH). Este repositório guarda informações sobre os procedimentos realizados, quantidades aprovadas e os respetivos valores financeiros repassados aos municípios.
 
 Este relatório técnico tem como objetivo documentar, de forma detalhada, toda a engenharia de dados aplicada na construção de um fluxo automatizado (Pipeline) capaz de extrair, tratar, consolidar e disponibilizar estes dados para análise estratégica. O projeto abrange desde o desenvolvimento de um web scraper assíncrono para contornar as limitações de interface do DATASUS, passando pelo tratamento de anomalias estruturais e numéricas, até a persistência final em um banco de dados relacional \textit{PostgreSQL} na Instituição de Ensino Superior de Brasília (IESB).
+
+Sobre essa base foi construído um \textit{dashboard} web em Streamlit, com um assistente de inteligência artificial que responde perguntas em linguagem natural consultando os dados (Capítulo~\ref{cap:streamlit}). O Capítulo~\ref{cap:v2} documenta a versão 2 da aplicação, que resolveu problemas de memória, desempenho e credenciais observados em produção, passou a consultar os dados com DuckDB sobre arquivos Parquet e adotou um modelo de linguagem com plano gratuito.
 
 \chapter{Desenvolvimento do Web Scraping e Extração}
 
@@ -320,7 +325,9 @@ As tabelas foram então injetadas no SGBD através de modelagem estrita (parâme
 \item \textbf{Métricas Financeiras:} Todas as colunas de repasse financeiro foram modeladas como \textbf{Numeric(20,4)}. Este tipo assegura a preservação até 4 casas decimais para orçamentos massivos, evitando falhas de arredondamento comuns no tipo genérico de \textit{Float}.
 \end{itemize}
 
-\chapter{Desenvolvimento da Aplicação Web com Streamlit}
+\chapter{Desenvolvimento da Aplicação Web com Streamlit (Versão 1)}\label{cap:streamlit}
+
+\textit{Este capítulo descreve a versão 1 da aplicação, publicada em junho de 2026. Os módulos \texttt{db.py} e \texttt{fallback.py} foram substituídos na versão 2, descrita no Capítulo~\ref{cap:v2}, que também explica os motivos da mudança.}
 
 Com os dados devidamente migrados e estruturados no servidor PostgreSQL do IESB, o
 passo subsequente consistiu na construção de uma camada de apresentação e análise
@@ -381,7 +388,7 @@ banco, utilizador e senha do PostgreSQL — foi explicitamente declarado no
 em nenhum \textit{commit}.
 
 Para o ambiente de produção (Streamlit Cloud), as credenciais são injetadas de forma
-segura através do painel da plataforma em \textbf{Settings → Secrets}, sem nunca
+segura através do painel da plataforma em \textbf{Settings $\rightarrow$ Secrets}, sem nunca
 transitarem pelo sistema de controlo de versões.
 
 \section{Declaração de Dependências}
@@ -627,7 +634,7 @@ de utilitários de suporte utilizados diretamente pelo módulo \texttt{app.py}:
     para o período anterior.
 
     \item \texttt{previous\_period(year, month)} — calcula o período imediatamente
-    anterior ao fornecido, tratando corretamente as transições de ano (mês 1 → mês 12
+    anterior ao fornecido, tratando corretamente as transições de ano (mês 1 $\rightarrow$ mês 12
     do ano anterior). Retorna \texttt{None} quando o ano resultante seria inferior ao
     limiar mínimo \texttt{MIN\_VALID\_YEAR}, impedindo que o delta dos KPIs seja
     calculado sobre dados inexistentes.
@@ -738,8 +745,8 @@ interface são automaticamente adaptadas para refletir a ausência da dimensão 
 \begin{itemize}
     \item O filtro \textbf{Unidade da Federação} é removido da barra lateral; apenas
     o filtro de Município permanece disponível.
-    \item Uma faixa de aviso é exibida: ⚠️ \textbf{Modo Offline} (se o banco falhou)
-    ou 📁 informativo (se o utilizador activou o toggle manualmente).
+    \item Uma faixa de aviso é exibida: \textbf{Modo Offline} (se o banco falhou)
+    ou um aviso informativo (se o utilizador activou o toggle manualmente).
     \item No gráfico \textbf{Ranking Top 10}, o rádio de seleção de nível
     (Município / UF) é ocultado; o ranking opera exclusivamente por Município.
     \item No \textbf{Scatter Plot}, o \textit{hover} exibe apenas o nome do município,
@@ -864,7 +871,7 @@ layout de três colunas (\texttt{st.columns(3)}):
 Cada KPI exibe adicionalmente um \textbf{delta percentual} calculado em relação ao
 período imediatamente anterior. A função \texttt{previous\_period()} implementa a
 lógica de retrocesso calendárico, tratando corretamente as transições de ano
-(dezembro → novembro do ano corrente, janeiro → dezembro do ano anterior). Os totais
+(dezembro $\rightarrow$ novembro do ano corrente, janeiro $\rightarrow$ dezembro do ano anterior). Os totais
 do período anterior são consultados via \texttt{get\_period\_totals()} (ou
 \texttt{get\_fallback\_period\_totals()} em modo \textit{offline}), que aplica os mesmos
 filtros geográficos da sessão atual para garantir comparabilidade.
@@ -874,7 +881,7 @@ filtros geográficos da sessão atual para garantir comparabilidade.
 O conteúdo do \textit{dashboard} é organizado em quatro abas
 (\texttt{st.tabs}), separando categorias distintas de informação:
 
-\subsubsection*{Aba 0 — 🏠 Introdução}
+\subsubsection*{Aba 0 — Introdução}
 
 A aba de introdução é sempre renderizada, mesmo antes de qualquer filtro ser
 selecionado, e não depende de conexão com o banco de dados. Apresenta quatro secções
@@ -972,6 +979,198 @@ autenticação OAuth, tornando o fluxo de publicação completamente transparent
 desenvolvedor: a modificação de qualquer ficheiro do repositório reflecte-se na
 aplicação publicada sem intervenção manual adicional.
 
+\chapter{Versão 2: Desempenho, Dados Locais e Assistente de IA}\label{cap:v2}
+
+A versão 1 da aplicação, descrita no capítulo anterior, foi publicada em junho de 2026.
+Com o uso, três problemas apareceram: o aplicativo ficava lento e era encerrado pelo
+Streamlit Community Cloud com a mensagem \textit{``End of Service''}; o assistente de IA
+parava de responder quando as credenciais da AWS expiravam; e o agente de IA era lento e
+frágil. Este capítulo documenta o diagnóstico desses problemas e a versão 2, publicada em
+novembro de 2026 no repositório \texttt{caiorj2004/aih\_sus} (o mesmo repositório,
+renomeado a partir de \texttt{aih\_sp}).
+
+\section{O Assistente de IA da Versão 1}
+
+A versão 1 já incluía uma aba ``Assistente IA'', não descrita no capítulo anterior: um
+agente \textit{text-to-SQL} construído com a função \texttt{create\_sql\_agent} da
+biblioteca LangChain, no modo \texttt{zero-shot-react-description} (o modelo escreve o
+raciocínio e a ação em texto livre, e a biblioteca interpreta esse texto), com o modelo
+Claude Sonnet 4 acessado pelo AWS Bedrock. O agente consultava o PostgreSQL e, se o banco
+estivesse indisponível, uma cópia dos arquivos Parquet carregada num SQLite em memória.
+As perguntas e respostas eram gravadas na tabela \texttt{agente\_logs}, pensada como base
+para monitoramento e melhoria contínua.
+
+Os próprios registros dessa tabela mostram uma das falhas: em 08/06/2026 uma pergunta foi
+respondida com o erro \texttt{ExpiredTokenException} (``The security token included in
+the request is expired''). As credenciais eram temporárias, emitidas pelo AWS STS com
+\texttt{AWS\_SESSION\_TOKEN}, e precisavam ser renovadas manualmente no console da AWS.
+
+\section{Diagnóstico de Memória e Lentidão}
+
+O Streamlit Community Cloud oferece cerca de 1 GB de memória por aplicativo; ao
+ultrapassar esse limite, o processo é encerrado sem \textit{traceback}. A análise do código
+e a medição com o \texttt{AppTest} do Streamlit identificaram cinco causas, resumidas na
+Tabela~\ref{tab:memoria}.
+
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.46\textwidth} >{\raggedright\arraybackslash}p{0.46\textwidth}}
+\caption{Causas do consumo de memória na versão 1 e correções na versão 2}\label{tab:memoria}\\
+\toprule
+\textbf{Versão 1} & \textbf{Versão 2} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Versão 1} & \textbf{Versão 2} \\
+\midrule
+\endhead
+O mesmo recorte era carregado até quatro vezes por renderização (lista, estatísticas,
+gráficos e ``todos os municípios''), e o \texttt{st.cache\_data} devolve uma cópia nova
+do DataFrame a cada chamada. &
+O recorte é carregado uma única vez e compartilhado pelas abas, com
+\texttt{st.cache\_resource}, que devolve o mesmo objeto sem copiar. \\
+\midrule
+O cache não tinha limite de entradas: cada combinação de filtros ficava em memória até o
+TTL expirar. &
+No máximo dois recortes em cache (\texttt{max\_entries=2}). \\
+\midrule
+A aba de lista convertia cada célula em texto formatado: no recorte do Brasil inteiro,
+cerca de 139 mil linhas por 110 colunas, ou 15 milhões de \textit{strings} (em teste, o
+pico de memória passou de 2 GB). &
+A tabela exibe as primeiras 1.000 linhas; o recorte completo fica disponível no CSV. \\
+\midrule
+O CSV de exportação era montado em memória a cada interação, mesmo sem clique no botão. &
+O CSV é gerado apenas quando o botão é clicado (\texttt{st.download\_button} com função). \\
+\midrule
+No modo \textit{offline}, os dois Parquets inteiros ficavam em memória no pandas e, no
+assistente, eram copiados mais uma vez para um SQLite em memória. &
+Dashboard e assistente consultam os Parquets pelo DuckDB, sem cópia. \\
+\bottomrule
+\end{longtable}
+
+Quanto à lentidão, cada mudança de filtro gerava uma consulta pela rede ao servidor do
+IESB com cerca de 110 colunas, e qualquer exceção chamava
+\texttt{st.cache\_resource.clear()}, descartando a conexão e o agente, que precisavam ser recriados. Em novembro de 2026,
+verificou-se também que o aplicativo publicado ainda era construído a partir de um
+\textit{branch} antigo (\texttt{copilot/create-streamlit-dashboard}), e não do
+\textit{branch} principal; o \textit{deploy} foi refeito a partir do \texttt{main}.
+
+\section{Nova Camada de Dados: DuckDB sobre Parquet}
+
+O DuckDB é um banco de dados analítico embutido: roda dentro do processo Python, sem
+servidor, e consulta arquivos Parquet diretamente do disco. Como o Parquet é um formato
+colunar, o DuckDB lê apenas as colunas e os blocos de linhas necessários a cada consulta;
+filtros, junções e agregações são executados por ele, e só o resultado chega ao pandas.
+
+Na versão 2, o aplicativo não se conecta a nenhum banco remoto durante o uso. O módulo
+\texttt{dados.py} substitui \texttt{db.py} e \texttt{fallback.py}. Na inicialização, ele
+cria um arquivo DuckDB temporário contendo apenas \textit{views} sobre os arquivos de
+\texttt{data/}, sem copiar os dados, e o abre em modo somente leitura:
+
+\begin{lstlisting}[language=Python]
+con.execute(f"CREATE VIEW aih_qtd AS SELECT * FROM read_parquet('{QTD_FILE}')")
+con.execute(f"CREATE VIEW aih_vl AS SELECT * FROM read_parquet('{VL_FILE}')")
+con.execute(f"CREATE VIEW municipios AS SELECT * FROM read_parquet('{MUN_FILE}')")
+...
+duckdb.connect(caminho, read_only=True, config={"memory_limit": "256MB", "threads": 1})
+\end{lstlisting}
+
+A conexão é única (\texttt{st.cache\_resource}) e cada consulta usa um cursor próprio, que
+é a forma segura de compartilhar o DuckDB entre as sessões simultâneas do Streamlit. O
+limite de 256 MB e uma \textit{thread} mantêm o motor dentro da memória disponível.
+
+\subsection{Dados Locais com UF}
+
+A limitação do modo \textit{offline} da versão 1 (ausência de UF) foi resolvida com o
+arquivo \texttt{data/municipios.parquet}, construído a partir das tabelas
+\texttt{municipios\_ibge} e \texttt{unidade\_federacao} do PostgreSQL: código do município
+com seis dígitos (o mesmo do TabNet), nome com acentos, UF, região, indicador de capital e
+coordenadas. Um único município do SIH/SUS não constava do cadastro, Boa Esperança do Norte
+(MT, código 510183, instalado em 2025), e foi incluído explicitamente. O dicionário de
+procedimentos passou a ser o arquivo \texttt{data/dic\_geral.csv}.
+
+O PostgreSQL continua sendo a fonte de verdade: o \textit{script}
+\texttt{scripts/atualizar\_dados.py} lê as tabelas de produção (ou exportações em CSV) e
+regrava os arquivos de \texttt{data/} quando novos meses são carregados. A equivalência foi
+verificada por teste automatizado: os totais anuais calculados pelo DuckDB coincidem com
+os obtidos do PostgreSQL e registrados em \texttt{agente\_logs} (por exemplo, 466.288.815
+procedimentos e R\$ 23.671.426.406,63 em 2024).
+
+\section{Interface}
+
+\begin{itemize}
+    \item \textbf{Filtros sem formulário:} Ano, Mês, UF e Município ficam lado a lado na
+    barra lateral e atualizam o painel imediatamente; a lista de municípios acompanha as
+    UFs selecionadas. O aplicativo abre com todos os dados (todos os anos, meses e UFs).
+    \item \textbf{Delta dos KPIs corrigido:} a versão 1 tomava como período corrente o
+    maior mês selecionado, mesmo que não existisse no ano (por exemplo, dezembro de 2026),
+    e montava o período anterior com abreviações em inglês (``Dec''), que não existem nos
+    dados; o delta ficava vazio. A versão 2 usa o último mês efetivamente presente no
+    recorte e abreviações em português.
+    \item \textbf{Heatmap e gráficos:} sem filtro de município, os gráficos que usam todos
+    os municípios da UF reaproveitam o recorte já carregado; o heatmap copia apenas as
+    colunas que utiliza.
+\end{itemize}
+
+\section{Assistente de IA na Versão 2}
+
+\subsection{Modelo e Agente}
+
+O provedor padrão passou a ser o Groq, que oferece um plano gratuito com chave de API
+permanente; o AWS Bedrock permanece disponível como opção, com usuário IAM de chave
+permanente. O agente foi reescrito com \texttt{langchain.agents.create\_agent}, que usa
+\textit{tool calling}: o modelo chama a ferramenta \texttt{consultar\_sql} com argumentos
+estruturados, em vez de produzir texto livre que precisa ser interpretado. O prompt de
+sistema é montado a partir dos próprios dados e contém o esquema das tabelas, os períodos
+disponíveis (com o aviso de anos incompletos) e o dicionário dos 54 grupos de
+procedimento, indicando os grupos que existem só em quantidade ou só em valor. Com isso, o
+modelo não precisa gastar passos explorando o banco.
+
+\subsection{Segurança}
+
+Além do banco aberto em modo somente leitura, cada consulta do modelo passa pela função
+\texttt{validar\_sql}, que aceita uma única instrução \texttt{SELECT} ou \texttt{WITH} e
+recusa comandos de escrita e funções capazes de ler arquivos ou variáveis de ambiente
+(onde o Streamlit expõe os \textit{secrets}). Textos entre aspas são ignorados na
+verificação, para que valores como o mês \texttt{'Set'} não sejam confundidos com o
+comando \texttt{SET}. O resultado é limitado a 200 linhas.
+
+\begin{lstlisting}[language=Python]
+_PROIBIDO = re.compile(
+    r"\b(insert|update|delete|drop|create|alter|attach|copy|export|install|load|"
+    r"pragma|set|call|...)\b"
+    r"|\b(read_\w+|glob|query|getenv|current_setting|duckdb_\w+|...)\s*\(",
+    re.IGNORECASE)
+\end{lstlisting}
+
+\subsection{Custo, Transparência e Registro}
+
+\begin{itemize}
+    \item \textbf{Cota gratuita:} limite de perguntas por sessão (15 por padrão) e cache de
+    perguntas repetidas sem histórico, que não chamam o modelo novamente.
+    \item \textbf{Transparência:} cada resposta exibe as consultas SQL executadas, o número
+    de linhas retornadas, o tempo e o modelo usado, permitindo conferir a origem de cada
+    número.
+    \item \textbf{Registro:} perguntas e respostas continuam sendo gravadas em
+    \texttt{agente\_logs} quando o PostgreSQL está configurado, ou num CSV local.
+\end{itemize}
+
+\section{Testes, Integração Contínua e Resultados}
+
+A versão 2 inclui uma suíte \texttt{pytest} com 14 testes: totais anuais iguais aos do
+PostgreSQL, UF atribuída a todos os municípios do SIH, banco efetivamente somente leitura,
+consultas aceitas e recusadas pela trava de SQL, e o laço do agente executado com um modelo
+simulado, sem consumir cota de API. O GitHub Actions executa os testes e inicia o
+\textit{dashboard} com o \texttt{AppTest} a cada \textit{push}, em Python 3.12 e 3.14
+(versão usada pelo Streamlit Community Cloud).
+
+Medições com o \texttt{AppTest}: a abertura com todos os dados (cerca de 139 mil linhas)
+leva cerca de 3 segundos, com pico de memória em torno de 710 MB, abaixo do limite de
+1 GB; a troca para uma única UF leva cerca de 0,3 segundo. Os arquivos de dados ocupam
+cerca de 13 MB no repositório.
+
+A contrapartida da arquitetura é que os dados do aplicativo são um retrato do banco de
+produção: a inclusão de novos meses exige executar o \textit{script} de atualização e
+publicar novamente.
+
 \chapter{Resultados e Conclusão}
 
 A metodologia aplicada revelou-se um sucesso técnico em todas as suas etapas.
@@ -989,18 +1188,22 @@ funcionalidades que noutras \textit{stacks} exigiriam a implementação de um
 \textit{backend} REST separado, uma aplicação \textit{frontend} em JavaScript e uma
 camada de autenticação independente.
 
-A introdução do módulo \texttt{fallback.py} com dados Parquet locais revelou-se um
-investimento de resiliência essencial: a aplicação continua operacional mesmo na
-ausência de conectividade ao servidor institucional, degradando graciosamente apenas as
-funcionalidades dependentes da dimensão UF. O toggle manual de modo de conexão confere
-flexibilidade adicional para demonstrações e validações offline.
+Na versão 1, o módulo \texttt{fallback.py} com dados Parquet locais garantiu que a
+aplicação continuasse operacional sem conectividade ao servidor institucional, e as
+otimizações de acesso ao PostgreSQL (\textit{Loose Index Scan} via CTE recursiva,
+cursores \textit{server-side} e consulta consolidada em dois estágios) reduziram o custo
+das consultas no servidor. O uso em produção mostrou, porém, que o gargalo estava na
+aplicação: cópias repetidas dos mesmos DataFrames, cache sem limite e formatação de todas
+as células excediam a memória do Streamlit Community Cloud, e as credenciais temporárias da
+AWS interrompiam o assistente de IA.
 
-As otimizações implementadas no acesso ao banco de dados — em particular o padrão de
-\textit{Loose Index Scan} via CTE recursiva, o uso de cursores \textit{server-side}
-com \textit{streaming} em lotes e a decomposição da consulta consolidada em dois
-estágios — demonstraram ser abordagens essenciais para garantir tempos de resposta
-aceitáveis sobre tabelas de alta cardinalidade, sem necessidade de desnormalização ou
-materialização de vistas pré-calculadas.
+A versão 2 tratou essas causas diretamente. Com o DuckDB consultando os Parquets em modo
+somente leitura, dashboard e assistente passaram a usar a mesma fonte, sem depender de rede
+nem de credenciais; o recorte completo dos dados abre em cerca de 3 segundos e com pico de
+memória em torno de 710 MB. O assistente, com \textit{tool calling}, trava de SQL somente
+leitura e consultas exibidas ao usuário, passou a rodar num plano gratuito sem renovação
+manual de credenciais. Testes automatizados e integração contínua verificam, a cada
+alteração, que os números continuam iguais aos do banco de produção.
 
 A secção de gráficos analíticos evoluiu de quatro para cinco visualizações,
 incorporando o heatmap sazonal para identificação de padrões temporais e substituindo
