@@ -48,7 +48,7 @@ Também saíram a dependência do banco para abrir o app e o "modo offline" sem 
   * funções que leem arquivos ou variáveis de ambiente (`read_csv`, `glob`, `getenv`...) são bloqueadas;
   * o resultado é limitado a 200 linhas.
 * **Cota gratuita:** há um limite de perguntas por sessão (padrão 15), e perguntas repetidas são respondidas do cache, sem nova chamada ao modelo.
-* **Logs:** pergunta e resposta vão para a tabela `agente_logs` do PostgreSQL, se configurado, ou para `logs/agente_logs.csv`. Servem de base para avaliar e melhorar o assistente.
+* **Logs:** pergunta e resposta vão para a tabela `agente_logs` do PostgreSQL (bloco `[connections.postgresql]` nos secrets) ou, sem esse bloco, para `logs/agente_logs.csv`. A aba do assistente mostra o destino; se a gravação no banco falhar, aparece um aviso com o motivo, o log vai para o CSV e a falha fica registrada nos logs do app. Servem de base para avaliar e melhorar o assistente.
 
 ---
 
@@ -98,7 +98,8 @@ aih_sus/
 ├── app.py                       # Interface Streamlit
 ├── dados.py                     # DuckDB (somente leitura) sobre os Parquet; consultas do dashboard
 ├── assistente.py                # Agente de IA: prompt com esquema, ferramenta SQL com trava, Groq/Bedrock
-├── pagina_chat.py               # Aba do assistente: limites, cache, logs, exibição das consultas
+├── pagina_chat.py               # Aba do assistente: limites, cache, exibição das consultas
+├── registro_logs.py             # Registro das conversas: agente_logs (PostgreSQL) ou CSV local
 ├── scripts/atualizar_dados.py   # PostgreSQL (ou CSVs exportados) -> data/
 ├── data/
 │   ├── aih_qtd.parquet          # quantidades aprovadas (município × mês × grupo de procedimento)
