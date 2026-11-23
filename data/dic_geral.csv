@@ -1,0 +1,55 @@
+n,s
+Ações coletivas/individuais em saúde,0101
+Coleta de material,0201
+Diagnóstico em laboratório clínico,0202
+Diagnóstico por anatomia patológica e citopatologia,0203
+Diagnóstico por radiologia,0204
+Diagnóstico por ultrassonografia,0205
+Diagnóstico por tomografia,0206
+Diagnóstico por ressonância magnética,0207
+Diagnóstico por medicina nuclear in vivo,0208
+Diagnóstico por endoscopia,0209
+Diagnóstico por radiologia intervencionista,0210
+Métodos diagnósticos em especialidades,0211
+Diagnóstico e procedimentos especiais em hemoterapia,0212
+Diagnóstico em vigilância epidemiológica e ambiental,0213
+Diagnóstico por teste rápido,0214
+Consultas / Atendimentos / Acompanhamentos,0301
+Fisioterapia,0302
+Tratamentos clínicos (outras especialidades),0303
+Tratamento em oncologia,0304
+Tratamento em nefrologia,0305
+Hemoterapia,0306
+Tratamentos odontológicos,0307
+"Tratamento de lesões, envenenamentos e outros, decorrentes de causas externas",0308
+Terapias especializadas,0309
+Parto e nascimento,0310
+Cuidados paliativos,0311
+"Pequenas cirurgias e cirurgias de pele, tecido subcutâneo e mucosa",0401
+Cirurgia de glândulas endócrinas,0402
+Cirurgia do sistema nervoso central e periférico,0403
+"Cirurgia das vias aéreas superiores, da face, da cabeça e do pescoço",0404
+Cirurgia do aparelho da visão,0405
+Cirurgia do aparelho circulatório,0406
+"Cirurgia do aparelho digestivo, órgãos anexos e parede abdominal",0407
+Cirurgia do sistema osteomuscular,0408
+Cirurgia do aparelho geniturinário,0409
+Cirurgia de mama,0410
+Cirurgia obstétrica,0411
+Cirurgia torácica,0412
+Cirurgia reparadora,0413
+Bucomaxilofacial,0414
+Outras cirurgias,0415
+Cirurgia em oncologia,0416
+Anestesiologia,0417
+Cirurgia em nefrologia,0418
+"Coleta e exames para fins de doação de órgãos, tecidos e células e de transplante",0501
+Avaliação de morte encefálica,0502
+Ações relacionadas à doação de órgãos e tecidos para transplante,0503
+Processamento de tecidos para transplante,0504
+"Transplante de órgãos, tecidos e células",0505
+Acompanhamento e intercorrências no pré e pós-transplante,0506
+Medicamentos de âmbito hospitalar e urgência,0603
+"Órteses, próteses e materiais especiais relacionados ao ato cirúrgico",0702
+Ações relacionadas ao estabelecimento,0801
+Ações relacionadas ao atendimento,0802
